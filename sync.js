@@ -247,8 +247,8 @@
       flash(event.currentTarget, "已复制 ✓");
     });
 
-    document.querySelector("#sync-export")?.addEventListener("click", (event) => {
-      const snapshot = readSnapshot();
+    document.querySelector("#sync-export")?.addEventListener("click", async (event) => {
+      const snapshot = cloudMode ? await fetchCloudSnapshot() : readSnapshot();
       const payload = {
         tripId: TRIP_ID,
         exportedAt: new Date().toISOString(),
@@ -283,8 +283,13 @@
         snapshot.tickets = Array.isArray(parsed.tickets) ? parsed.tickets : snapshot.tickets;
         if (parsed.settings) snapshot.settings = { ...(snapshot.settings || {}), ...parsed.settings };
         snapshot.updatedAt = new Date().toISOString();
-        writeSnapshot(snapshot);
-        window.location.href = `?s=${encodeCode(compactState(snapshot))}`;
+        if (cloudMode) {
+          await saveCloudSnapshot(snapshot);
+          window.location.reload();
+        } else {
+          writeSnapshot(snapshot);
+          window.location.href = `?s=${encodeCode(compactState(snapshot))}`;
+        }
       } catch (error) {
         const hint = document.querySelector("#sync-hint");
         if (hint) hint.textContent = "导入失败：文件不是有效的进度 JSON。";
@@ -302,9 +307,34 @@
     });
   }
 
+  /* ---------- 云端模式（D1 自动同步） ---------- */
+  let cloudMode = false;
+
+  function renderCloudPanel() {
+    const body = document.querySelector("#sync-body");
+    if (!body || body.dataset.cloud) return;
+    body.dataset.cloud = "1";
+    body.innerHTML = `
+      <div class="sync-main">
+        <div class="sync-side">
+          <p class="sync-side__count">☁️ 自动同步已开启</p>
+          <p class="sync-lead">这个页面已经连了云端数据库，所有打开它的设备会自动共享进度：勾一项准备、记一笔账，其他设备几秒内就能看到，不用扫码也不用复制链接。</p>
+          <div class="sync-actions">
+            <button type="button" class="sync-btn" id="sync-export">导出进度文件</button>
+            <label class="sync-btn" for="sync-import">导入进度文件
+              <input type="file" id="sync-import" accept="application/json,.json" hidden>
+            </label>
+          </div>
+          <p class="sync-hint" id="sync-hint">账单、出行人、准备事项、门票都会实时共享。拿到链接的人都能改，只发给同行的人。</p>
+        </div>
+      </div>`;
+    bindPanel();
+  }
+
   /* ---------- 状态变化 -> 地址栏 + 二维码 ---------- */
   function watchChanges() {
     window.setInterval(() => {
+      if (cloudMode) return;
       const snapshot = readSnapshot();
       const compact = compactState(snapshot);
       const next = JSON.stringify(compact);
@@ -323,7 +353,37 @@
     }, 1000);
   }
 
+  /* ---------- 云端读写（D1） ---------- */
+  async function fetchCloudSnapshot() {
+    try {
+      const response = await fetch(`/api/trip/${encodeURIComponent(TRIP_ID)}?collections=bills,travelers,todos,tickets`, { cache: "no-store" });
+      if (!response.ok) throw new Error(String(response.status));
+      return await response.json();
+    } catch { return readSnapshot(); }
+  }
+
+  async function saveCloudSnapshot(snapshot) {
+    const storage = window.TravelRuntimeStorage;
+    if (!storage?.createAdapter) return false;
+    const adapter = storage.createAdapter({
+      mode: "d1",
+      apiBase: "/api/trip",
+      tripId: TRIP_ID,
+      collections: ["bills", "travelers", "todos", "tickets"]
+    });
+    await adapter.load();
+    await adapter.save(snapshot);
+    return true;
+  }
+
   applyIncoming();
+
+  document.addEventListener("travel-data-ready", (event) => {
+    const mode = String(event.detail?.config?.persistence?.mode || "").toLowerCase();
+    if (mode !== "d1") return;
+    cloudMode = true;
+    renderCloudPanel();
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => { renderPanel(); watchChanges(); });

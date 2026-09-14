@@ -860,3 +860,25 @@
   .sync-main { flex-direction: column; align-items: stretch; }
   .sync-qr { align-self: center; }
 }
+
+/* ---------- 云端同步提示条 ---------- */
+#cloud-sync-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(26px + var(--safe-bottom));
+  z-index: 60;
+  transform: translate(-50%, 12px);
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: rgba(19, 38, 47, 0.92);
+  color: #f2f7f6;
+  font-size: 12.5px;
+  font-weight: 650;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+#cloud-sync-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
