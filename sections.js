@@ -64,26 +64,30 @@
       return;
     }
 
-    const range = $("#schedule-range");
-    if (range) range.textContent = competition.dateRange || "";
-
     const venue = competition.venue || {};
     const focusEvents = competition.focusEvents || [];
     const tripStart = data.trip?.startDate || "";
     const tripEnd = data.trip?.endDate || "";
     const outsideTrip = (date) => Boolean(tripStart && tripEnd && (date < tripStart || date > tripEnd));
+
+    const range = $("#schedule-range");
+    if (range) {
+      range.textContent = tripStart && tripEnd
+        ? `${formatDate(parseLocalDate(tripStart))} – ${formatDate(parseLocalDate(tripEnd))} · 行程内`
+        : (competition.dateRange || "");
+    }
+
     const today = new Date();
     const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
-    let sessions = competition.sessions;
+    // 只展示本次行程内的比赛日
+    let sessions = competition.sessions.filter((session) => !outsideTrip(session.date));
     if (state.filter === "focus") {
       sessions = sessions
         .map((session) => ({ ...session, events: session.events.filter((event) => isFocusEvent(event, focusEvents)) }))
         .filter((session) => session.events.length);
     } else if (state.filter === "medal") {
       sessions = sessions.filter((session) => session.medalDay);
-    } else if (state.filter === "trip") {
-      sessions = sessions.filter((session) => !outsideTrip(session.date));
     }
 
     const venueCard = `
@@ -100,7 +104,6 @@
       ? sessions.map((session) => {
           const date = parseLocalDate(session.date);
           const isToday = session.date === todayKey;
-          const isOutside = outsideTrip(session.date);
 
           // 同一开赛时间下的多场次合并成一个时间组
           const groups = [];
@@ -142,7 +145,7 @@
 
           return `
             <div class="session">
-              <article class="session-card${session.medalDay ? " is-medal" : ""}${isToday ? " is-today" : ""}${isOutside ? " is-outside" : ""}">
+              <article class="session-card${session.medalDay ? " is-medal" : ""}${isToday ? " is-today" : ""}">
                 <div class="session-head">
                   <div class="session-head__date">
                     <strong>${escapeHtml(formatDate(date))}</strong>
@@ -150,9 +153,8 @@
                   </div>
                   <div class="session-head__title">
                     <h3>${escapeHtml(session.title || "")}</h3>
-                    <p>${session.events.length} 场${isToday ? " · 今天" : ""}${isOutside ? " · 不在行程内" : ""}</p>
+                    <p>${session.events.length} 场${isToday ? " · 今天" : ""}</p>
                   </div>
-                  ${isOutside ? `<span class="badge-outside">行程外</span>` : ""}
                   ${session.medalDay ? `<span class="badge-gold">金牌日</span>` : ""}
                 </div>
                 <div class="event-list">${eventsHtml}</div>
@@ -169,7 +171,6 @@
         <button type="button" class="chip${state.filter === "all" ? " is-active" : ""}" data-filter="all">全部</button>
         <button type="button" class="chip${state.filter === "focus" ? " is-active" : ""}" data-filter="focus">★ 男团 / 男双</button>
         <button type="button" class="chip${state.filter === "medal" ? " is-active" : ""}" data-filter="medal">金牌日</button>
-        <button type="button" class="chip${state.filter === "trip" ? " is-active" : ""}" data-filter="trip">我的行程内</button>
       </div>${sessionsHtml}`;
 
     const chips = $("#schedule-chips");
