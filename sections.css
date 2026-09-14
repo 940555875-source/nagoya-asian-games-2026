@@ -98,14 +98,21 @@
 }
 .session-head__date {
   flex: 0 0 auto;
-  width: 46px;
+  width: 50px;
   text-align: center;
-  padding: 6px 0;
+  padding: 7px 0;
   border-radius: 12px;
   background: var(--ink);
   color: #f2f7f6;
 }
-.session-head__date strong { display: block; font-size: 18px; line-height: 1; font-weight: 800; }
+.session-head__date strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
 .session-head__date span { display: block; margin-top: 3px; font-size: 10px; letter-spacing: 0.06em; opacity: 0.75; }
 .session-head__title { min-width: 0; flex: 1; }
 .session-head__title h3 { margin: 0; font-size: 15px; font-weight: 750; }
