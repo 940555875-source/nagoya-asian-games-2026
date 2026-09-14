@@ -10,19 +10,19 @@
   <title>名古屋亚运 · 羽毛球观赛之旅</title>
   <link rel="stylesheet" href="styles.css?v=20260910-3">
   <link rel="stylesheet" href="ledger.css?v=20260910-2">
-  <link rel="stylesheet" href="sections.css?v=20260914-5">
+  <link rel="stylesheet" href="sections.css?v=20260914-6">
   <script src="runtime-storage.js?v=20260910-2" defer></script>
-  <script src="sync.js?v=20260914-1" defer></script>
+  <script src="sync.js?v=20260914-2" defer></script>
   <script src="overview-map.js?v=20260910-2" defer></script>
   <script src="route-ui.js?v=20260910-2" defer></script>
   <script src="app.js?v=20260910-4" defer></script>
   <script src="ticket-pdf-preview.js?v=20260910-2" defer></script>
   <script src="ledger.js?v=20260910-3" defer></script>
   <script src="sections.js?v=20260914-4" defer></script>
-  <script src="live.js?v=20260914-1" defer></script>
+  <script src="live.js?v=20260914-2" defer></script>
   <script src="translate.js?v=20260914-1" defer></script>
-  <script src="navbar.js?v=20260914-1" defer></script>
-  <script src="site-navigation.js?v=20260910-2" defer></script>
+  <script src="navbar.js?v=20260914-2" defer></script>
+  <script src="site-navigation.js?v=20260910-3" defer></script>
 </head>
 <body>
   <a class="skip-link" id="skip-link" href="#main">跳到主要内容</a>
@@ -35,6 +35,7 @@
 
   <nav class="section-nav" id="section-nav" aria-label="页面栏目">
     <div class="section-nav__inner">
+      <a href="#sync" data-nav="sync">🔗 同步</a>
       <a href="#flights" data-nav="flights" data-module="flights" hidden>✈️ 航班</a>
       <a href="#schedule" data-nav="schedule">🏸 赛程</a>
       <a href="#stay" data-nav="stay">🏠 住宿</a>
@@ -51,6 +52,17 @@
       <div class="hero__eyebrow" id="trip-eyebrow"></div>
       <h1 id="trip-title">正在载入旅程</h1>
       <p class="hero__date" id="trip-date"></p>
+    </section>
+
+    <section class="section sync-section" id="sync" aria-labelledby="sync-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">SYNC</p>
+          <h2 id="sync-title">多端同步</h2>
+        </div>
+        <span class="soft-label" id="sync-updated"></span>
+      </div>
+      <div id="sync-body"></div>
     </section>
 
     <section class="section flights-section" id="flights" aria-labelledby="flights-title" data-module="flights" hidden>
@@ -155,6 +167,10 @@
         </div>
         <span class="soft-label" id="weather-range"></span>
       </div>
+      <div class="live-bar">
+        <span class="live-bar__time" id="weather-updated">尚未更新</span>
+        <button type="button" class="live-bar__refresh" id="weather-refresh">刷新</button>
+      </div>
       <div id="weather-body"></div>
     </section>
 
@@ -165,6 +181,10 @@
           <h2 id="fx-title">日元汇率</h2>
         </div>
         <span class="soft-label">T-1</span>
+      </div>
+      <div class="live-bar">
+        <span class="live-bar__time" id="fx-updated">尚未更新</span>
+        <button type="button" class="live-bar__refresh" id="fx-refresh">刷新</button>
       </div>
       <div id="fx-body"></div>
     </section>

@@ -39,6 +39,34 @@
     try { localStorage.setItem(key, JSON.stringify({ at: new Date().toISOString(), payload })); } catch { /* 忽略 */ }
   }
 
+  /* ---------- 更新时间显示 ---------- */
+  let weatherStamp = "";
+  let fxStamp = "";
+
+  function relativeTime(iso) {
+    const diff = Date.now() - Date.parse(iso);
+    if (!Number.isFinite(diff) || diff < 0) return "";
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return "刚刚更新";
+    if (minutes < 60) return `${minutes} 分钟前更新`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} 小时前更新`;
+    return `${Math.floor(hours / 24)} 天前更新`;
+  }
+
+  function paintStamps() {
+    const weather = $("#weather-updated");
+    if (weather) weather.textContent = relativeTime(weatherStamp) || "尚未更新";
+    const fx = $("#fx-updated");
+    if (fx) fx.textContent = relativeTime(fxStamp) || "尚未更新";
+  }
+
+  function setBusy(button, busy) {
+    if (!button) return;
+    button.disabled = busy;
+    button.textContent = busy ? "刷新中…" : "刷新";
+  }
+
   function shortDate(iso) {
     const [, month, day] = String(iso).split("-");
     return `${Number(month)}/${Number(day)}`;
@@ -92,7 +120,7 @@
       <p class="live-meta">${escapeHtml(meta.label)} · 更新于 ${escapeHtml(meta.updatedAt)} · ${escapeHtml(meta.note)}</p>`);
   }
 
-  async function loadWeather(trip, config) {
+  async function loadWeather(trip, config, options = {}) {
     weatherSkeleton();
     const settings = config || {};
     const start = trip.startDate;
@@ -102,9 +130,11 @@
       return;
     }
 
-    const cached = readCache(weatherCacheKey, 6 * 3600 * 1000);
+    const cached = options.force ? null : readCache(weatherCacheKey, 6 * 3600 * 1000);
     if (cached && cached.payload?.days?.length) {
+      weatherStamp = cached.at || "";
       renderWeather(cached.payload.days, cached.payload.meta);
+      paintStamps();
       return;
     }
 
@@ -143,14 +173,18 @@
         note: settings.note || ""
       };
       writeCache(weatherCacheKey, { days, meta });
+      weatherStamp = new Date().toISOString();
       renderWeather(days, meta);
+      paintStamps();
     } catch (error) {
       console.warn("天气数据获取失败", error);
       const stale = readCache(weatherCacheKey, 7 * 24 * 3600 * 1000);
       if (stale?.payload?.days?.length) {
+        weatherStamp = stale.at || "";
         renderWeather(stale.payload.days, { ...stale.payload.meta, note: "（离线缓存）" + (stale.payload.meta.note || "") });
+        paintStamps();
       } else {
-        renderWeatherState(`<div class="live-empty">天气数据获取失败，请检查网络后刷新页面。</div>`);
+        renderWeatherState(`<div class="live-empty">天气数据获取失败，请点右上角「刷新」重试。</div>`);
       }
     }
   }
@@ -209,7 +243,7 @@
     update();
   }
 
-  async function loadFx(config) {
+  async function loadFx(config, options = {}) {
     const settings = config || {};
     const base = settings.base || "JPY";
     const symbols = settings.symbols || ["CNY"];
@@ -218,8 +252,13 @@
 
     renderFx(`<div class="live-loading">正在获取汇率…</div>`);
 
-    const cached = readCache(fxCacheKey, 12 * 3600 * 1000);
-    if (cached?.payload?.rates) { renderFxState(cached.payload); return; }
+    const cached = options.force ? null : readCache(fxCacheKey, 12 * 3600 * 1000);
+    if (cached?.payload?.rates) {
+      fxStamp = cached.at || "";
+      renderFxState(cached.payload);
+      paintStamps();
+      return;
+    }
 
     // T-1：取昨天的日期，Frankfurter 会回落到最近一个工作日
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -234,14 +273,18 @@
       if (!symbols.every((symbol) => Number.isFinite(Number(rates[symbol])))) throw new Error("缺少汇率字段");
       const state = { base, symbols, baseAmount, date: String(data.date || yesterday), rates, note };
       writeCache(fxCacheKey, state);
+      fxStamp = new Date().toISOString();
       renderFxState(state);
+      paintStamps();
     } catch (error) {
       console.warn("汇率获取失败", error);
       const stale = readCache(fxCacheKey, 14 * 24 * 3600 * 1000);
       if (stale?.payload?.rates) {
+        fxStamp = stale.at || "";
         renderFxState({ ...stale.payload, note: "（离线缓存）" + (stale.payload.note || "") });
+        paintStamps();
       } else {
-        renderFx(`<div class="live-empty">汇率获取失败，请检查网络后刷新页面。</div>`);
+        renderFx(`<div class="live-empty">汇率获取失败，请点右上角「刷新」重试。</div>`);
       }
     }
   }
@@ -255,6 +298,29 @@
     }
     if ($("#weather-body")) loadWeather(data.trip || {}, live.weather);
     if ($("#fx-body")) loadFx(live.fx);
+
+    const weatherButton = $("#weather-refresh");
+    if (weatherButton && !weatherButton.dataset.bound) {
+      weatherButton.dataset.bound = "1";
+      weatherButton.addEventListener("click", async () => {
+        setBusy(weatherButton, true);
+        try { await loadWeather(data.trip || {}, live.weather, { force: true }); }
+        finally { setBusy(weatherButton, false); }
+      });
+    }
+
+    const fxButton = $("#fx-refresh");
+    if (fxButton && !fxButton.dataset.bound) {
+      fxButton.dataset.bound = "1";
+      fxButton.addEventListener("click", async () => {
+        setBusy(fxButton, true);
+        try { await loadFx(live.fx, { force: true }); }
+        finally { setBusy(fxButton, false); }
+      });
+    }
+
+    paintStamps();
+    window.setInterval(paintStamps, 60000);
   }
 
   document.addEventListener("travel-data-ready", (event) => start(event.detail));
