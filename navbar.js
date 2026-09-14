@@ -2,7 +2,7 @@
 (() => {
   "use strict";
 
-  const NAV_IDS = ["flights", "schedule", "stay", "phrase", "weather", "fx", "prep"];
+  const NAV_IDS = ["flights", "schedule", "stay", "translate", "weather", "fx", "prep"];
   let frame = 0;
 
   function navLinks() {

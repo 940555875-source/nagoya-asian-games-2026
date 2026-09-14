@@ -4,7 +4,7 @@
   const STORAGE_VERSION = 1;
   const DEFAULT_SETTINGS = Object.freeze({
     baseCurrency: "CNY",
-    commonCurrencies: ["EUR", "CHF", "HKD"],
+    commonCurrencies: ["JPY", "HKD", "EUR", "CHF"],
     lastCurrency: "CNY"
   });
   const CATEGORIES = Object.freeze(["餐饮", "交通", "住宿", "门票", "购物", "其他"]);
@@ -268,8 +268,12 @@
     const travelerIds = new Set(travelers.map((traveler) => traveler.id));
     const requestedBase = String(raw.settings?.baseCurrency || DEFAULT_SETTINGS.baseCurrency).toUpperCase();
     const baseCurrency = CURRENCY_BY_CODE.has(requestedBase) ? requestedBase : DEFAULT_SETTINGS.baseCurrency;
+    // JPY 是本次行程的当地货币，始终保留在常用列表里（兼容早期已存的设置）
+    const storedCommon = Array.isArray(raw.settings?.commonCurrencies)
+      ? raw.settings.commonCurrencies
+      : DEFAULT_SETTINGS.commonCurrencies;
     const commonCurrencies = [...new Set(
-      (Array.isArray(raw.settings?.commonCurrencies) ? raw.settings.commonCurrencies : DEFAULT_SETTINGS.commonCurrencies)
+      ["JPY", ...storedCommon]
         .map((code) => String(code).toUpperCase())
         .filter((code) => CURRENCY_BY_CODE.has(code) && code !== baseCurrency)
     )];

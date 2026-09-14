@@ -10,7 +10,7 @@
   <title>名古屋亚运 · 羽毛球观赛之旅</title>
   <link rel="stylesheet" href="styles.css?v=20260910-3">
   <link rel="stylesheet" href="ledger.css?v=20260910-2">
-  <link rel="stylesheet" href="sections.css?v=20260914-3">
+  <link rel="stylesheet" href="sections.css?v=20260914-4">
   <script src="runtime-storage.js?v=20260910-2" defer></script>
   <script src="sync.js?v=20260914-1" defer></script>
   <script src="overview-map.js?v=20260910-2" defer></script>
@@ -18,8 +18,9 @@
   <script src="app.js?v=20260910-4" defer></script>
   <script src="ticket-pdf-preview.js?v=20260910-2" defer></script>
   <script src="ledger.js?v=20260910-3" defer></script>
-  <script src="sections.js?v=20260914-3" defer></script>
+  <script src="sections.js?v=20260914-4" defer></script>
   <script src="live.js?v=20260914-1" defer></script>
+  <script src="translate.js?v=20260914-1" defer></script>
   <script src="navbar.js?v=20260914-1" defer></script>
   <script src="site-navigation.js?v=20260910-2" defer></script>
 </head>
@@ -37,7 +38,7 @@
       <a href="#flights" data-nav="flights" data-module="flights" hidden>✈️ 航班</a>
       <a href="#schedule" data-nav="schedule">🏸 赛程</a>
       <a href="#stay" data-nav="stay">🏠 住宿</a>
-      <a href="#phrase" data-nav="phrase">💬 翻译</a>
+      <a href="#translate" data-nav="translate">💬 翻译</a>
       <a href="#weather" data-nav="weather">🌤 天气</a>
       <a href="#fx" data-nav="fx">💱 汇率</a>
       <a href="#prep" data-nav="prep" data-module="todo" hidden>🎒 准备</a>
@@ -87,18 +88,63 @@
       <div id="stay-body"></div>
     </section>
 
-    <section class="section phrase-section" id="phrase" aria-labelledby="phrase-title">
+    <section class="section translate-section" id="translate" aria-labelledby="translate-title">
       <div class="section-heading">
         <div>
           <p class="section-kicker">中文 ⇄ 日本語</p>
-          <h2 id="phrase-title">常用日语</h2>
+          <h2 id="translate-title">翻译</h2>
         </div>
-        <span class="soft-label" id="phrase-count"></span>
+        <span class="soft-label">拍照 + 文字</span>
       </div>
-      <div class="phrase-search">
-        <input id="phrase-input" type="search" placeholder="搜中文 / 日文 / 罗马音" aria-label="搜索常用语" autocomplete="off">
+
+      <div class="tl-card">
+        <div class="tl-card__head">
+          <span class="tl-card__icon" aria-hidden="true">📷</span>
+          <div>
+            <h3>拍照翻译</h3>
+            <p>拍下菜单、路牌、赛程表，自动识别日文并翻译成中文</p>
+          </div>
+        </div>
+        <div class="tl-row">
+          <label class="tl-file" for="tl-image">
+            <input type="file" id="tl-image" accept="image/*" hidden>
+            <span>选择照片 / 拍照</span>
+          </label>
+          <span class="tl-hint" id="tl-ocr-hint">首次使用需下载约 2MB 识别库</span>
+        </div>
+        <div class="tl-preview" id="tl-preview" hidden><img id="tl-preview-img" alt="待识别的图片"></div>
+        <div class="tl-progress" id="tl-progress" hidden>
+          <div class="tl-progress__track"><div class="tl-progress__bar" id="tl-progress-bar"></div></div>
+          <span class="tl-progress__text" id="tl-progress-text">准备中…</span>
+        </div>
+        <textarea class="tl-text" id="tl-ocr" rows="3" placeholder="识别出的日文会显示在这里，可以直接改" aria-label="识别结果"></textarea>
+        <div class="tl-row">
+          <button type="button" class="tl-btn tl-btn--primary" id="tl-ocr-translate">翻译成中文</button>
+          <button type="button" class="tl-btn" id="tl-ocr-clear">清空</button>
+        </div>
+        <div class="tl-result" id="tl-ocr-result" hidden></div>
       </div>
-      <div id="phrase-body"></div>
+
+      <div class="tl-card">
+        <div class="tl-card__head">
+          <span class="tl-card__icon" aria-hidden="true">💬</span>
+          <div>
+            <h3>中日文字翻译</h3>
+            <p>输入中文或日文，自动判断翻译方向</p>
+          </div>
+        </div>
+        <div class="tl-swap" id="tl-swap">
+          <button type="button" class="tl-dir is-active" data-dir="auto">自动</button>
+          <button type="button" class="tl-dir" data-dir="zh-ja">中 → 日</button>
+          <button type="button" class="tl-dir" data-dir="ja-zh">日 → 中</button>
+        </div>
+        <textarea class="tl-text" id="tl-input" rows="3" placeholder="输入要翻译的内容…" aria-label="待翻译内容"></textarea>
+        <div class="tl-row">
+          <button type="button" class="tl-btn tl-btn--primary" id="tl-go">翻译</button>
+          <button type="button" class="tl-btn" id="tl-clear">清空</button>
+        </div>
+        <div class="tl-result" id="tl-result" hidden></div>
+      </div>
     </section>
 
     <section class="section weather-section" id="weather" aria-labelledby="weather-title">
