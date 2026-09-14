@@ -1,0 +1,672 @@
+{
+  "$schema": "./schemas/trip-data.schema.json",
+  "schemaVersion": "2.0-lite",
+  "config": {
+    "schemaVersion": "1.0.0",
+    "modules": {
+      "flights": true,
+      "overview": false,
+      "itinerary": false,
+      "todo": true,
+      "driving": false,
+      "ledger": true
+    },
+    "language": "zh-CN",
+    "persistence": {
+      "mode": "local"
+    }
+  },
+  "metadata": {
+    "tripId": "nagoya-asian-games-2026",
+    "title": "名古屋亚运 · 羽毛球观赛之旅",
+    "language": "zh-CN",
+    "assets": {}
+  },
+  "trip": {
+    "status": "draft",
+    "startDate": "2026-09-22",
+    "endDate": "2026-09-27",
+    "dayCount": 6,
+    "nightCountAway": 5,
+    "countries": [
+      {
+        "code": "JP",
+        "name": "日本",
+        "nameZh": "日本",
+        "nameEn": "Japan"
+      }
+    ],
+    "primaryDestinationCountries": [
+      "JP"
+    ],
+    "primaryDestinationName": "名古屋",
+    "heroTitle": "名古屋",
+    "heroEyebrow": "NAGOYA · ASIAN GAMES 2026",
+    "citiesAndAreas": [
+      "大阪",
+      "名古屋",
+      "一宫"
+    ],
+    "routeSummary": "中国香港 → 大阪关西 → 一宫（住宿+观赛）→ 名古屋中部 → 中国香港",
+    "groupSize": 1
+  },
+  "flightJourneys": [
+    {
+      "id": "journey-outbound",
+      "title": "去程 · 香港 → 大阪",
+      "date": "2026-09-22"
+    },
+    {
+      "id": "journey-inbound",
+      "title": "回程 · 名古屋 → 香港",
+      "date": "2026-09-27"
+    }
+  ],
+  "flights": [
+    {
+      "id": "flight-outbound-1",
+      "journeyId": "journey-outbound",
+      "sequence": 1,
+      "airline": {
+        "name": "Hong Kong Airlines",
+        "nameZh": "香港航空"
+      },
+      "flightNumber": "HX616",
+      "status": "待出行",
+      "departure": {
+        "airportCode": "HKG",
+        "city": "中国香港",
+        "airportName": "香港国际机场",
+        "terminal": "T2",
+        "date": "2026-09-22",
+        "time": "02:50",
+        "utcOffset": "+08:00"
+      },
+      "arrival": {
+        "airportCode": "KIX",
+        "city": "大阪",
+        "airportName": "关西国际机场",
+        "terminal": "T1",
+        "date": "2026-09-22",
+        "time": "07:55",
+        "utcOffset": "+09:00"
+      }
+    },
+    {
+      "id": "flight-inbound-1",
+      "journeyId": "journey-inbound",
+      "sequence": 1,
+      "airline": {
+        "name": "HK Express",
+        "nameZh": "香港快运航空"
+      },
+      "flightNumber": "UO671",
+      "status": "待出行",
+      "arrivalNote": "次日抵达",
+      "departure": {
+        "airportCode": "NGO",
+        "city": "名古屋",
+        "airportName": "中部国际机场",
+        "terminal": "T2",
+        "date": "2026-09-27",
+        "time": "20:45",
+        "utcOffset": "+09:00"
+      },
+      "arrival": {
+        "airportCode": "HKG",
+        "city": "中国香港",
+        "airportName": "香港国际机场",
+        "terminal": "T1",
+        "date": "2026-09-28",
+        "time": "00:00",
+        "utcOffset": "+08:00"
+      }
+    }
+  ],
+  "accommodations": [],
+  "groundTransport": {
+    "rentalCar": null,
+    "rentalChecklist": [],
+    "drivingNotes": [],
+    "drivingReferenceLinks": [],
+    "plannedRoadLegs": [],
+    "publicTransitAndRail": []
+  },
+  "days": [
+    {
+      "day": 1,
+      "date": "2026-09-22",
+      "title": "抵达大阪 · 男团 1/4 决赛",
+      "locations": [],
+      "schedule": []
+    },
+    {
+      "day": 2,
+      "date": "2026-09-23",
+      "title": "男团半决赛",
+      "locations": [],
+      "schedule": []
+    },
+    {
+      "day": 3,
+      "date": "2026-09-24",
+      "title": "团体决赛日 · 男团决赛",
+      "locations": [],
+      "schedule": []
+    },
+    {
+      "day": 4,
+      "date": "2026-09-25",
+      "title": "男双 1/16 赛",
+      "locations": [],
+      "schedule": []
+    },
+    {
+      "day": 5,
+      "date": "2026-09-26",
+      "title": "男双 1/8 赛",
+      "locations": [],
+      "schedule": []
+    },
+    {
+      "day": 6,
+      "date": "2026-09-27",
+      "title": "男双 1/4 决赛 · 返程",
+      "locations": [],
+      "schedule": []
+    }
+  ],
+  "places": [],
+  "restaurants": [],
+  "bookingsAndTickets": [],
+  "ticketPlanning": {
+    "statusStorage": "local",
+    "statusStorageNote": "门票状态默认只保存在当前浏览器。",
+    "items": []
+  },
+  "preTrip": {
+    "packingItems": [
+      {
+        "id": "prep-1",
+        "text": "护照 + 日本签证（确认有效期）",
+        "completed": false
+      },
+      {
+        "id": "prep-2",
+        "text": "观赛门票：男团 9/22、9/23、9/24，男双 9/25、9/26、9/27",
+        "completed": false
+      },
+      {
+        "id": "prep-3",
+        "text": "HX616 9/22 02:50 香港 T2 起飞 — 提前 3 小时到机场",
+        "completed": false
+      },
+      {
+        "id": "prep-4",
+        "text": "UO671 9/27 20:45 名古屋中部 T2 起飞",
+        "completed": false
+      },
+      {
+        "id": "prep-5",
+        "text": "民宿订单、入住指引、房东联系方式",
+        "completed": false
+      },
+      {
+        "id": "prep-6",
+        "text": "日元现金 + 可境外刷卡银行卡",
+        "completed": false
+      },
+      {
+        "id": "prep-7",
+        "text": "eSIM / 国际漫游",
+        "completed": false
+      },
+      {
+        "id": "prep-8",
+        "text": "关西机场 → 一宫 的交通方案（ICOCA / 特急）",
+        "completed": false
+      },
+      {
+        "id": "prep-9",
+        "text": "一宫 → 名古屋中部机场 的返程交通 + 出发时间倒推",
+        "completed": false
+      },
+      {
+        "id": "prep-10",
+        "text": "确认场馆禁止携带物品清单",
+        "completed": false
+      },
+      {
+        "id": "prep-11",
+        "text": "翻译 App / 离线地图下载",
+        "completed": false
+      }
+    ],
+    "preparationsExplicitlyMentioned": [],
+    "missingNote": ""
+  },
+  "mapLinks": {
+    "providedGoogleMapsLinks": [],
+    "note": "",
+    "cityLevelNavigationDisabled": false,
+    "navigationPolicy": {
+      "noNavigationTypes": [
+        "flight",
+        "note",
+        "rest"
+      ],
+      "selfNavigationTypes": [
+        "drive",
+        "return",
+        "transfer",
+        "check-in",
+        "check-out",
+        "restaurant",
+        "attraction",
+        "walk",
+        "hike"
+      ]
+    },
+    "navigationPlaces": []
+  },
+  "issuesAndUncertainties": [
+    "回程 9/27 20:45，将错过 9/28 男双半决赛与 9/29 男双决赛",
+    "9/22 抵达关西机场 07:55，同日 15:00 男团 1/4 决赛，交通与入住时间较紧"
+  ],
+  "map": {
+    "schemaVersion": "1.0-lite",
+    "mapMode": "template-auto",
+    "templateId": "auto",
+    "disclaimer": "本图仅表达地点的相对方位与路线顺序，不代表真实比例或精确地理边界。",
+    "places": [],
+    "routes": [],
+    "dailyRoutes": []
+  },
+  "live": {
+    "weather": {
+      "label": "一宫市（比赛场馆所在地）",
+      "latitude": 35.3048,
+      "longitude": 136.8016,
+      "timezone": "Asia/Tokyo",
+      "note": "数据源 Open-Meteo，逐日预报，每天自动刷新；出行前 3 天内准确度最高。"
+    },
+    "fx": {
+      "base": "JPY",
+      "symbols": [
+        "CNY",
+        "HKD"
+      ],
+      "baseAmount": 100,
+      "note": "数据源 Frankfurter（欧洲央行参考汇率），取 T-1 最近一个工作日中间价；仅作参考，实际以银行/信用卡结算价为准。"
+    }
+  },
+  "competition": {
+    "sport": "羽毛球",
+    "sportEn": "Badminton",
+    "games": "第 20 届亚运会 · 爱知·名古屋 2026",
+    "dateRange": "2026-09-20 — 2026-09-29",
+    "source": "赛程依据《名古屋亚运会羽毛球赛事时间表》整理，时间均为日本当地时间（JST）。",
+    "venue": {
+      "nameZh": "一宫市立综合体育馆",
+      "nameJa": "一宮市立総合体育館",
+      "nameEn": "Ichinomiya City Municipal Gymnasium",
+      "areaJa": "愛知県一宮市光明寺公園内",
+      "areaEn": "Komyoji Park, Ichinomiya, Aichi, Japan",
+      "mapsQuery": "一宮市立総合体育館 愛知県一宮市"
+    },
+    "timezoneNote": "表中时间为日本当地时间（JST），灰色小字为北京时间（JST − 1 小时）。灰色淡出的比赛日不在本次行程内（9/22–9/27）。",
+    "focusEvents": [
+      "男子团体",
+      "男子双打"
+    ],
+    "sessions": [
+      {
+        "date": "2026-09-20",
+        "weekday": "周日",
+        "title": "团体赛 · 1/8 赛",
+        "events": [
+          {
+            "timeJst": "09:30",
+            "discipline": "女团",
+            "name": "女子团体 1/8 赛",
+            "stage": "1/8 赛"
+          },
+          {
+            "timeJst": "15:00",
+            "discipline": "女团",
+            "name": "女子团体 1/8 赛",
+            "stage": "1/8 赛"
+          }
+        ]
+      },
+      {
+        "date": "2026-09-21",
+        "weekday": "周一",
+        "title": "团体赛 · 男团 1/8 赛",
+        "events": [
+          {
+            "timeJst": "09:30",
+            "discipline": "男团",
+            "name": "男子团体 1/8 赛",
+            "stage": "1/8 赛",
+            "focus": true
+          },
+          {
+            "timeJst": "15:00",
+            "discipline": "男团",
+            "name": "男子团体 1/8 赛",
+            "stage": "1/8 赛",
+            "focus": true
+          }
+        ]
+      },
+      {
+        "date": "2026-09-22",
+        "weekday": "周二",
+        "title": "团体赛 · 1/4 决赛",
+        "events": [
+          {
+            "timeJst": "09:30",
+            "discipline": "女团",
+            "name": "女子团体 1/4 决赛",
+            "stage": "1/4 决赛"
+          },
+          {
+            "timeJst": "15:00",
+            "discipline": "男团",
+            "name": "男子团体 1/4 决赛",
+            "stage": "1/4 决赛",
+            "focus": true
+          }
+        ]
+      },
+      {
+        "date": "2026-09-23",
+        "weekday": "周三",
+        "title": "团体赛 · 半决赛",
+        "events": [
+          {
+            "timeJst": "09:30",
+            "discipline": "女团",
+            "name": "女子团体 半决赛",
+            "stage": "半决赛"
+          },
+          {
+            "timeJst": "15:00",
+            "discipline": "男团",
+            "name": "男子团体 半决赛",
+            "stage": "半决赛",
+            "focus": true
+          }
+        ]
+      },
+      {
+        "date": "2026-09-24",
+        "weekday": "周四",
+        "title": "团体决赛日",
+        "medalDay": true,
+        "events": [
+          {
+            "timeJst": "09:30",
+            "discipline": "女团",
+            "name": "女子团体 决赛",
+            "stage": "决赛",
+            "medal": true
+          },
+          {
+            "timeJst": "13:30",
+            "discipline": "女团",
+            "name": "女子团体 颁奖仪式",
+            "stage": "颁奖",
+            "type": "ceremony"
+          },
+          {
+            "timeJst": "16:00",
+            "discipline": "男团",
+            "name": "男子团体 决赛",
+            "stage": "决赛",
+            "focus": true,
+            "medal": true
+          },
+          {
+            "timeJst": "20:00",
+            "discipline": "男团",
+            "name": "男子团体 颁奖仪式",
+            "stage": "颁奖",
+            "type": "ceremony"
+          }
+        ]
+      },
+      {
+        "date": "2026-09-25",
+        "weekday": "周五",
+        "title": "单项赛 · 首轮",
+        "events": [
+          {
+            "timeJst": "09:30",
+            "discipline": "单打",
+            "name": "女子单打 1/32 赛",
+            "stage": "1/32 赛"
+          },
+          {
+            "timeJst": "09:30",
+            "discipline": "单打",
+            "name": "男子单打 1/32 赛",
+            "stage": "1/32 赛"
+          },
+          {
+            "timeJst": "09:30",
+            "discipline": "混双",
+            "name": "混合双打 1/16 赛",
+            "stage": "1/16 赛"
+          },
+          {
+            "timeJst": "16:00",
+            "discipline": "女双",
+            "name": "女子双打 1/16 赛",
+            "stage": "1/16 赛"
+          },
+          {
+            "timeJst": "16:00",
+            "discipline": "男双",
+            "name": "男子双打 1/16 赛",
+            "stage": "1/16 赛",
+            "focus": true
+          },
+          {
+            "timeJst": "16:00",
+            "discipline": "混双",
+            "name": "混合双打 1/8 赛",
+            "stage": "1/8 赛"
+          }
+        ]
+      },
+      {
+        "date": "2026-09-26",
+        "weekday": "周六",
+        "title": "单项赛 · 1/16、1/8 赛",
+        "events": [
+          {
+            "timeJst": "09:30",
+            "discipline": "单打",
+            "name": "女子单打 1/16 赛",
+            "stage": "1/16 赛"
+          },
+          {
+            "timeJst": "09:30",
+            "discipline": "单打",
+            "name": "男子单打 1/16 赛",
+            "stage": "1/16 赛"
+          },
+          {
+            "timeJst": "16:00",
+            "discipline": "单打",
+            "name": "女子单打 1/8 赛",
+            "stage": "1/8 赛"
+          },
+          {
+            "timeJst": "16:00",
+            "discipline": "单打",
+            "name": "男子单打 1/8 赛",
+            "stage": "1/8 赛"
+          },
+          {
+            "timeJst": "16:00",
+            "discipline": "女双",
+            "name": "女子双打 1/8 赛",
+            "stage": "1/8 赛"
+          },
+          {
+            "timeJst": "16:00",
+            "discipline": "男双",
+            "name": "男子双打 1/8 赛",
+            "stage": "1/8 赛",
+            "focus": true
+          }
+        ]
+      },
+      {
+        "date": "2026-09-27",
+        "weekday": "周日",
+        "title": "单项赛 · 1/4 决赛",
+        "events": [
+          {
+            "timeJst": "09:30",
+            "discipline": "女双",
+            "name": "女子双打 1/4 决赛",
+            "stage": "1/4 决赛"
+          },
+          {
+            "timeJst": "09:30",
+            "discipline": "混双",
+            "name": "混合双打 1/4 决赛",
+            "stage": "1/4 决赛"
+          },
+          {
+            "timeJst": "13:00",
+            "discipline": "单打",
+            "name": "女子单打 1/4 决赛",
+            "stage": "1/4 决赛"
+          },
+          {
+            "timeJst": "13:00",
+            "discipline": "单打",
+            "name": "男子单打 1/4 决赛",
+            "stage": "1/4 决赛"
+          },
+          {
+            "timeJst": "13:00",
+            "discipline": "男双",
+            "name": "男子双打 1/4 决赛",
+            "stage": "1/4 决赛",
+            "focus": true
+          }
+        ]
+      },
+      {
+        "date": "2026-09-28",
+        "weekday": "周一",
+        "title": "单项赛 · 半决赛",
+        "events": [
+          {
+            "timeJst": "09:30",
+            "discipline": "女双",
+            "name": "女子双打 半决赛",
+            "stage": "半决赛"
+          },
+          {
+            "timeJst": "09:30",
+            "discipline": "混双",
+            "name": "混合双打 半决赛",
+            "stage": "半决赛"
+          },
+          {
+            "timeJst": "13:00",
+            "discipline": "单打",
+            "name": "女子单打 半决赛",
+            "stage": "半决赛"
+          },
+          {
+            "timeJst": "13:00",
+            "discipline": "单打",
+            "name": "男子单打 半决赛",
+            "stage": "半决赛"
+          },
+          {
+            "timeJst": "13:00",
+            "discipline": "男双",
+            "name": "男子双打 半决赛",
+            "stage": "半决赛",
+            "focus": true
+          }
+        ]
+      },
+      {
+        "date": "2026-09-29",
+        "weekday": "周二",
+        "title": "单项决赛日",
+        "medalDay": true,
+        "events": [
+          {
+            "timeJst": "11:00",
+            "discipline": "男双",
+            "name": "男子双打 决赛",
+            "stage": "决赛",
+            "focus": true,
+            "medal": true
+          },
+          {
+            "timeJst": "11:00",
+            "discipline": "单打",
+            "name": "男子单打 决赛",
+            "stage": "决赛",
+            "medal": true
+          },
+          {
+            "timeJst": "11:00",
+            "discipline": "女双",
+            "name": "女子双打 决赛",
+            "stage": "决赛",
+            "medal": true
+          },
+          {
+            "timeJst": "11:00",
+            "discipline": "混双",
+            "name": "混合双打 决赛",
+            "stage": "决赛",
+            "medal": true
+          },
+          {
+            "timeJst": "11:00",
+            "discipline": "单打",
+            "name": "女子单打 决赛",
+            "stage": "决赛",
+            "medal": true
+          }
+        ]
+      }
+    ]
+  },
+  "stays": [
+    {
+      "id": "stay-1",
+      "source": "爱彼迎民宿（Airbnb）",
+      "name": "一宫本町 · 民宿",
+      "nameJa": "一宮市本町 · 民泊",
+      "status": "confirmed",
+      "checkIn": "2026-09-22",
+      "checkOut": "2026-09-27",
+      "nights": 5,
+      "addressEn": "3-chōme-7-18 Honmachi, Ichinomiya, Aichi 491-0859, Japan",
+      "addressJa": "〒491-0859 愛知県一宮市本町3丁目7-18",
+      "mapsQuery": "愛知県一宮市本町3丁目7-18",
+      "geo": null,
+      "notes": [
+        "位于一宫市本町，离比赛场馆一宫市立综合体育馆很近，步行/公交可达",
+        "9/22 抵达关西机场 07:55，同日 15:00 有男团 1/4 决赛，入住时间请提前与房东确认能否寄存行李",
+        "入住前请向房东确认门禁密码 / 钥匙盒位置"
+      ],
+      "transit": []
+    }
+  ]
+}

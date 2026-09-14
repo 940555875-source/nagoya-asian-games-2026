@@ -1,0 +1,517 @@
+/* 赛程 & 住宿 —— 名古屋亚运定制板块 */
+
+/* ---------- 通用 ---------- */
+.chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 0 4px;
+  margin-bottom: 16px;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+.chip {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.chip:active { transform: scale(0.97); }
+.chip.is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #f4f8f7;
+}
+
+.notice {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--lake-soft);
+  color: #1f5c6b;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.notice--warn { background: #fbeae5; color: #96452f; }
+
+/* ---------- 赛程 ---------- */
+.venue-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.venue-card__icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--lake-soft);
+  font-size: 20px;
+}
+.venue-card__body { min-width: 0; flex: 1; }
+.venue-card__name { margin: 0; font-size: 16px; font-weight: 750; letter-spacing: -0.01em; }
+.venue-card__sub { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.venue-card__map {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 9px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #eef6f6;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.session { margin-bottom: 14px; }
+.session-card {
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.session-card.is-today { box-shadow: var(--shadow), 0 0 0 2px var(--lake); }
+
+.session-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(19, 38, 47, 0.07);
+  background: linear-gradient(180deg, rgba(40, 123, 144, 0.05), transparent);
+}
+.session-head__date {
+  flex: 0 0 auto;
+  width: 46px;
+  text-align: center;
+  padding: 6px 0;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #f2f7f6;
+}
+.session-head__date strong { display: block; font-size: 18px; line-height: 1; font-weight: 800; }
+.session-head__date span { display: block; margin-top: 3px; font-size: 10px; letter-spacing: 0.06em; opacity: 0.75; }
+.session-head__title { min-width: 0; flex: 1; }
+.session-head__title h3 { margin: 0; font-size: 15px; font-weight: 750; }
+.session-head__title p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+.session-card.is-medal .session-head__date { background: var(--terracotta); }
+
+.badge-gold {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #fdf0d8;
+  color: #9a6a1c;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.event-list { padding: 6px 0 8px; }
+
+.time-group { padding: 10px 16px 2px; }
+.time-group + .time-group { border-top: 1px dashed rgba(19, 38, 47, 0.09); }
+.time-group__head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.time-group__head strong { font: 800 17px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -0.03em; }
+.time-group__head span { color: var(--muted); font: 600 10.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.time-group__body { display: flex; flex-direction: column; gap: 6px; }
+
+.event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 11px;
+  border-left: 3px solid rgba(19, 38, 47, 0.12);
+  background: rgba(19, 38, 47, 0.028);
+}
+.event-row.is-focus {
+  border-left-color: var(--terracotta);
+  background: linear-gradient(90deg, rgba(182, 92, 58, 0.1), rgba(182, 92, 58, 0.02));
+}
+.event-row.is-medal { background: linear-gradient(90deg, rgba(253, 240, 216, 0.85), rgba(253, 240, 216, 0.25)); }
+.event-row.is-focus.is-medal {
+  background: linear-gradient(90deg, rgba(182, 92, 58, 0.16), rgba(182, 92, 58, 0.03));
+}
+.event-row.is-ceremony {
+  border-left-style: dotted;
+  border-left-color: rgba(19, 38, 47, 0.2);
+  background: transparent;
+}
+.event-row.is-ceremony .event-main__name { color: var(--muted); font-weight: 600; font-size: 13px; }
+
+.event-main { min-width: 0; flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.event-main__name { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.35; flex: 1 1 auto; min-width: 120px; }
+.event-row.is-focus .event-main__name { color: #8d4526; }
+.event-main .tag-row { margin-top: 0; flex: 0 0 auto; }
+
+.disc {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  padding: 3px 7px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  background: #667a80;
+}
+.disc--team-m { background: #b65c3a; }
+.disc--team-f { background: #a8557a; }
+.disc--ms { background: #2c6b7d; }
+.disc--ws { background: #4a7f6b; }
+.disc--md { background: #c0762f; }
+.disc--wd { background: #7a6a9c; }
+.disc--xd { background: #4f7ea8; }
+.disc--other { background: #667a80; }
+
+.tag-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.tag {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(19, 38, 47, 0.06);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+.tag--focus { background: var(--terracotta); color: #fff4ee; }
+.tag--medal { background: #f0c987; color: #6d4710; }
+
+.schedule-empty {
+  padding: 28px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+/* ---------- 住宿 ---------- */
+.stay-card {
+  padding: 18px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.stay-card__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.stay-card__source {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--lake-soft);
+  color: #1f5c6b;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.stay-card__name { margin: 9px 0 0; font-size: 19px; font-weight: 780; letter-spacing: -0.02em; }
+.stay-card__nameJa { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; }
+
+.stay-dates {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(40, 123, 144, 0.06);
+}
+.stay-dates__col { min-width: 0; flex: 1; }
+.stay-dates__label { display: block; color: var(--muted); font-size: 10.5px; font-weight: 750; letter-spacing: 0.06em; }
+.stay-dates__value { display: block; margin-top: 3px; font: 700 14px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.stay-dates__nights {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #eef6f6;
+  font-size: 11.5px;
+  font-weight: 750;
+}
+
+.addr-block { margin-top: 14px; }
+.addr-block + .addr-block { margin-top: 10px; }
+.addr-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+.addr-block__lang {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.copy-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.copy-btn:active { background: rgba(19, 38, 47, 0.05); }
+.copy-btn.is-done { border-color: var(--forest); color: var(--forest); }
+.addr-block__text {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: rgba(19, 38, 47, 0.035);
+  font-size: 13.5px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+.addr-block__text.is-pending { color: #96452f; background: #fbeae5; }
+
+.stay-actions { display: flex; gap: 8px; margin-top: 16px; }
+.btn-map {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: var(--lake);
+  color: #f1f8f9;
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.btn-map:active { opacity: 0.86; }
+
+.stay-notes { margin: 14px 0 0; padding: 0; list-style: none; }
+.stay-notes li {
+  position: relative;
+  padding-left: 15px;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.stay-notes li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--lake);
+}
+
+/* ---------- 行程外的比赛日 ---------- */
+.session-card.is-outside { box-shadow: none; border: 1px dashed rgba(19, 38, 47, 0.16); }
+.session-card.is-outside .session-head { background: transparent; }
+.session-card.is-outside .session-head__date { background: #9aa7ab; }
+.session-card.is-outside .event-list { opacity: 0.45; }
+.session-card.is-outside .session-head__title h3 { color: var(--muted); }
+
+.badge-outside {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(19, 38, 47, 0.07);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+/* ---------- 实时板块：天气 / 汇率 ---------- */
+.live-loading, .live-empty {
+  padding: 26px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.6;
+}
+.live-empty { background: #fbeae5; color: #96452f; box-shadow: none; }
+.live-meta {
+  margin: 10px 2px 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+/* 天气卡片条 */
+.wx-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  padding: 2px 0 12px;
+}
+.wx-strip::-webkit-scrollbar { display: none; }
+.wx-card {
+  flex: 0 0 104px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.wx-card.is-today { box-shadow: var(--shadow), 0 0 0 2px var(--lake); }
+.wx-card__date strong { display: block; font: 800 15px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.wx-card__date span { display: block; margin-top: 3px; color: var(--muted); font-size: 10.5px; font-weight: 700; }
+.wx-card__icon { font-size: 26px; line-height: 1.2; }
+.wx-card__desc { font-size: 12px; font-weight: 700; line-height: 1.3; }
+.wx-card__temp { display: flex; align-items: baseline; gap: 5px; margin-top: 2px; }
+.wx-card__temp strong { font: 800 19px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.wx-card__temp span { color: var(--muted); font: 700 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.wx-card__rain {
+  margin-top: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(40, 123, 144, 0.1);
+  color: #1f5c6b;
+  font-size: 10.5px;
+  font-weight: 750;
+}
+.wx-card__rain.is-high { background: #fbeae5; color: #96452f; }
+
+/* 汇率卡片 */
+.fx-card {
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.fx-card__head { display: flex; align-items: center; gap: 9px; }
+.fx-card__badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #eef6f6;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.fx-card__date { color: var(--muted); font-size: 12px; font-weight: 700; }
+.fx-card__main {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0 4px;
+  padding: 14px 12px;
+  border-radius: 14px;
+  background: rgba(40, 123, 144, 0.07);
+}
+.fx-card__base { color: var(--muted); font: 700 15px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.fx-card__arrow { color: var(--muted); }
+.fx-card__quote { font: 820 30px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -0.03em; }
+.fx-card__rows { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; }
+.fx-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 9px 13px;
+  border-radius: 11px;
+  background: rgba(19, 38, 47, 0.035);
+}
+.fx-row__pair { color: var(--muted); font: 600 12.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.fx-row__value { font: 800 16px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.fx-converter { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(19, 38, 47, 0.08); }
+.fx-converter label { display: block; color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: 0.06em; }
+.fx-converter__row { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+.fx-converter__row input {
+  flex: 1;
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 700 16px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.fx-converter__row input:focus { outline: 2px solid var(--lake); outline-offset: 1px; }
+.fx-converter__unit { color: var(--muted); font-size: 12px; font-weight: 750; }
+.fx-converter__out { display: flex; gap: 14px; margin-top: 10px; }
+.fx-converter__out span { display: inline-flex; align-items: baseline; gap: 5px; font: 800 15px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.fx-converter__out em { color: var(--muted); font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; font-style: normal; }
+
+@media (max-width: 380px) {
+  .session-head { gap: 10px; }
+  .session-head__date { width: 42px; }
+  .event-main__name { font-size: 13.5px; min-width: 100%; }
+  .time-group { padding-inline: 12px; }
+}
+
+/* ---------- 多端同步 ---------- */
+.sync-bar {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.sync-bar__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sync-bar__title { font-size: 14px; font-weight: 780; letter-spacing: -0.01em; }
+.sync-bar__state { color: var(--forest); font-size: 11.5px; font-weight: 700; }
+.sync-bar__actions { display: flex; gap: 8px; margin-top: 12px; }
+.sync-btn {
+  min-height: 40px;
+  padding: 0 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sync-btn--primary {
+  flex: 1;
+  border-color: var(--lake);
+  background: var(--lake);
+  color: #f1f8f9;
+}
+.sync-btn:active { opacity: 0.86; }
+.sync-bar__hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
