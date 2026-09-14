@@ -515,3 +515,148 @@
   font-size: 12px;
   line-height: 1.55;
 }
+
+/* ---------- 横向导航栏 ---------- */
+.section-nav {
+  position: sticky;
+  top: calc(48px + var(--safe-top));
+  z-index: 19;
+  border-bottom: 1px solid rgba(19, 38, 47, 0.08);
+  background: rgba(243, 246, 242, 0.94);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.section-nav__inner {
+  width: min(100%, var(--content));
+  margin-inline: auto;
+  display: flex;
+  gap: 6px;
+  padding: 9px 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.section-nav__inner::-webkit-scrollbar { display: none; }
+.section-nav a {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.section-nav a:active { transform: scale(0.97); }
+.section-nav a.is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #f4f8f7;
+}
+.section-nav a[hidden] { display: none !important; }
+
+/* 锚点跳转时给顶栏 + 导航栏留出空间 */
+.section { scroll-margin-top: calc(48px + var(--safe-top) + 54px); }
+
+/* ---------- 常用日语 ---------- */
+.phrase-search { margin-bottom: 14px; }
+.phrase-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  font-family: inherit;
+}
+.phrase-search input::placeholder { color: var(--muted); }
+.phrase-search input:focus-visible {
+  outline: 2px solid var(--lake);
+  outline-offset: 1px;
+}
+
+.chip-row--phrase { margin-bottom: 6px; }
+
+.phrase-group { margin-bottom: 22px; }
+.phrase-group__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.phrase-group__icon { font-size: 17px; }
+.phrase-group__head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+.phrase-group__count {
+  margin-left: auto;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--lake-soft);
+  color: #1f5c6b;
+  font: 700 11px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.phrase-list { display: grid; gap: 8px; }
+.phrase-row {
+  padding: 12px 14px;
+  border: 1px solid rgba(19, 38, 47, 0.08);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.phrase-row__zh {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.phrase-row__ja {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.phrase-row__jaText {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--lake);
+  line-height: 1.5;
+}
+.phrase-row__romaji {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.5;
+}
+.phrase-row__copy {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.phrase-row__ja.is-done .phrase-row__copy {
+  border-color: var(--lake);
+  color: var(--lake);
+}

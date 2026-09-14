@@ -14,7 +14,28 @@
     "男双": "md", "女双": "wd", "混双": "xd",
     "单打": "ms"
   };
-  const state = { filter: "all", data: null };
+  const state = { filter: "all", phraseFilter: "all", phraseQuery: "", data: null };
+
+  async function copyText(text) {
+    if (!text) return false;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      try {
+        const helper = document.createElement("textarea");
+        helper.value = text;
+        helper.style.position = "fixed";
+        helper.style.opacity = "0";
+        document.body.appendChild(helper);
+        helper.select();
+        document.execCommand("copy");
+        helper.remove();
+      } catch (ignored) {
+        /* 环境不支持剪贴板时静默降级 */
+      }
+    }
+    return true;
+  }
 
   /* ---------- 工具 ---------- */
   function isFocusEvent(event, focusEvents = []) {
@@ -212,6 +233,101 @@
     target.innerHTML = `下一场关注比赛：<strong>${escapeHtml(next.name)}</strong> · ${escapeHtml(next.session.date)} ${escapeHtml(next.session.weekday)} — 还有 <strong>${days} 天 ${hours} 小时 ${minutes} 分</strong>`;
   }
 
+  /* ---------- 常用日语 ---------- */
+  function renderPhrases(data) {
+    const root = $("#phrase-body");
+    if (!root) return;
+    const phrases = data.phrases;
+    const countLabel = $("#phrase-count");
+    if (!phrases || !Array.isArray(phrases.categories) || !phrases.categories.length) {
+      root.innerHTML = `<p class="schedule-empty">常用语待补充。</p>`;
+      return;
+    }
+
+    const query = state.phraseQuery.trim().toLowerCase();
+    const categories = phrases.categories
+      .filter((category) => state.phraseFilter === "all" || category.id === state.phraseFilter)
+      .map((category) => ({
+        ...category,
+        items: query
+          ? category.items.filter((item) => `${item.zh} ${item.ja} ${item.romaji || ""}`.toLowerCase().includes(query))
+          : category.items
+      }))
+      .filter((category) => category.items.length);
+
+    if (countLabel) {
+      const totalAll = phrases.categories.reduce((sum, category) => sum + category.items.length, 0);
+      const shown = categories.reduce((sum, category) => sum + category.items.length, 0);
+      countLabel.textContent = shown === totalAll ? `${totalAll} 条` : `${shown} / ${totalAll} 条`;
+    }
+
+    const chips = `
+      <div class="chip-row chip-row--phrase" id="phrase-chips">
+        <button type="button" class="chip${state.phraseFilter === "all" ? " is-active" : ""}" data-phrase="all">全部</button>
+        ${phrases.categories.map((category) => `
+          <button type="button" class="chip${state.phraseFilter === category.id ? " is-active" : ""}" data-phrase="${escapeHtml(category.id)}">${escapeHtml(category.icon || "")} ${escapeHtml(category.label)}</button>`).join("")}
+      </div>`;
+
+    const body = categories.length
+      ? categories.map((category) => `
+          <div class="phrase-group">
+            <div class="phrase-group__head">
+              <span class="phrase-group__icon" aria-hidden="true">${escapeHtml(category.icon || "")}</span>
+              <h3>${escapeHtml(category.label)}</h3>
+              <span class="phrase-group__count">${category.items.length}</span>
+            </div>
+            <div class="phrase-list">
+              ${category.items.map((item) => `
+                <div class="phrase-row">
+                  <p class="phrase-row__zh">${escapeHtml(item.zh)}</p>
+                  <button type="button" class="phrase-row__ja" data-copy="${escapeHtml(item.ja)}">
+                    <span class="phrase-row__jaText">${escapeHtml(item.ja)}</span>
+                    ${item.romaji ? `<span class="phrase-row__romaji">${escapeHtml(item.romaji)}</span>` : ""}
+                    <span class="phrase-row__copy" aria-hidden="true">复制</span>
+                  </button>
+                </div>`).join("")}
+            </div>
+          </div>`).join("")
+      : `<p class="schedule-empty">没有匹配的常用语。</p>`;
+
+    const note = phrases.note ? `<p class="notice">${escapeHtml(phrases.note)}</p>` : "";
+    root.innerHTML = `${chips}${note}${body}`;
+
+    const chipsRow = $("#phrase-chips");
+    if (chipsRow) {
+      chipsRow.onclick = (event) => {
+        const chip = event.target.closest("[data-phrase]");
+        if (!chip) return;
+        state.phraseFilter = chip.dataset.phrase;
+        renderPhrases(state.data);
+      };
+    }
+
+    root.onclick = async (event) => {
+      const button = event.target.closest("[data-copy]");
+      if (!button) return;
+      await copyText(button.dataset.copy || "");
+      const flag = button.querySelector(".phrase-row__copy");
+      if (flag) {
+        flag.textContent = "已复制";
+        button.classList.add("is-done");
+        window.setTimeout(() => {
+          flag.textContent = "复制";
+          button.classList.remove("is-done");
+        }, 1600);
+      }
+    };
+
+    const input = $("#phrase-input");
+    if (input && !input.dataset.bound) {
+      input.dataset.bound = "1";
+      input.oninput = () => {
+        state.phraseQuery = input.value || "";
+        renderPhrases(state.data);
+      };
+    }
+  }
+
   /* ---------- 住宿 ---------- */
   function renderStays(data) {
     const root = $("#stay-body");
@@ -305,6 +421,7 @@
     state.data = data;
     renderSchedule(data);
     renderCountdown(data);
+    renderPhrases(data);
     renderStays(data);
   }
 

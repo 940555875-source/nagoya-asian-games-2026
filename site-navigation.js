@@ -1,5 +1,5 @@
 (() => {
-  const TRAVEL_HASHES = new Set(["", "#top", "#flights", "#schedule", "#stay", "#weather", "#fx", "#prep"]);
+  const TRAVEL_HASHES = new Set(["", "#top", "#flights", "#schedule", "#stay", "#phrase", "#weather", "#fx", "#prep"]);
   const isLedgerHash = (hash) => hash === "#ledger" || hash.startsWith("#ledger-");
   const ledgerEnabled = () => !document.querySelector("#ledger-navigation-link")?.hidden;
   const viewForHash = (hash) => isLedgerHash(hash) && ledgerEnabled() ? "ledger" : "travel";
@@ -108,7 +108,7 @@
         return;
       }
 
-      const travelLink = event.target.closest(".travel-navigation-menu a, #wordmark");
+      const travelLink = event.target.closest(".section-nav a, #wordmark");
       if (travelLink) {
         event.preventDefault();
         travelMenu?.removeAttribute("open");
