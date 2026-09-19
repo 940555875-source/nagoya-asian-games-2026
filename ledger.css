@@ -121,7 +121,7 @@ body[data-active-view="ledger"] .topbar { background: rgba(250, 251, 249, .93); 
 .ledger-app button, .ledger-app input, .ledger-app select { font-family: inherit; }
 .ledger-app h1, .ledger-app h2, .ledger-app h3, .ledger-app p { margin: 0; }
 .ledger-page-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.ledger-page-header h1 { font-size: clamp(30px, 9vw, 42px); line-height: 1; letter-spacing: -.055em; font-weight: 820; }
+.ledger-page-header h2 { font-size: clamp(30px, 9vw, 42px); line-height: 1; letter-spacing: -.055em; font-weight: 820; }
 .ledger-header-actions { display: flex; align-items: center; gap: 5px; }
 .ledger-text-button, .ledger-icon-button {
   min-height: 42px; padding: 0 9px; border: 0; border-radius: 9px;

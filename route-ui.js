@@ -238,7 +238,10 @@ function setupRouteExplorer() {
       activateDayMaps(root);
     });
   });
-  $("#map-close").onclick = () => $("#map-dialog").close();
-  $("#map-dialog").addEventListener("close", () => closePopover());
+  /* 地图弹窗元素在某些模块组合下不存在，缺 null 保护会抛错并中断后续初始化 */
+  const mapClose = $("#map-close");
+  const mapDialog = $("#map-dialog");
+  if (mapClose && mapDialog) mapClose.onclick = () => mapDialog.close();
+  mapDialog?.addEventListener("close", () => closePopover());
   $$(".day-detail:not([hidden])").forEach(activateDayMaps);
 }

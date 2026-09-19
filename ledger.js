@@ -1050,11 +1050,11 @@
             <div class="ledger-add-member-preview" data-ledger-member-preview style="--ledger-avatar-color:${escapeAttribute(suggestedColor)}">?</div>
             <label class="ledger-field ledger-add-member-name">
               <span class="ledger-field-label">添加成员</span>
-              <input class="ledger-input" name="name" maxlength="30" placeholder="输入姓名" autocomplete="off" required>
+              <input class="ledger-input" name="name" maxlength="30" placeholder="输入姓名" autocomplete="off" aria-label="添加成员姓名" required>
             </label>
             <label class="ledger-color-picker" title="选择头像颜色">
               <span class="ledger-visually-hidden">头像颜色</span>
-              <input type="color" name="color" value="${escapeAttribute(suggestedColor)}">
+              <input type="color" name="color" value="${escapeAttribute(suggestedColor)}" aria-label="选择头像颜色">
             </label>
             <button class="ledger-secondary-button" type="submit">添加</button>
           </form>
@@ -1169,7 +1169,7 @@
     ledgerRoot.innerHTML = `
       <div class="ledger-app" data-ledger-trip-id="${escapeAttribute(ledgerTripId)}">
         <header class="ledger-page-header">
-          <h1>旅行记账</h1>
+          <h2>旅行记账</h2>
           <div class="ledger-header-actions">
             <button class="ledger-icon-button" type="button" data-ledger-action="open-settings" aria-label="记账设置">设置</button>
           </div>
