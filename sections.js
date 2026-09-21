@@ -23,6 +23,8 @@
   const AUTO_REFRESH_KEY = "nagoya-schedule-auto-refresh";
   const SILENT_SYNC_MS = 3 * 60 * 1000; // 页面可见时每 3 分钟静默比对一次，官方一更新就重渲染
   const VISIBLE_LIMIT = 8;           // 每个比赛日默认展示场次，其余折叠
+  const FINISHED_AFTER_MS = 4 * 3600 * 1000; // 开赛 4 小时后视为已结束（官网未及时更新赛果时也能归档）
+  const STATUS_EVAL_MS = 60 * 1000;  // 每分钟重算一次「是否结束」
 
   const state = {
     filter: "focus", // 默认展示「中国队 / 关注」，看全部再点「全部」
@@ -56,6 +58,34 @@
     const [year, month, day] = String(dateString).split("-").map(Number);
     const [hour, minute] = String(timeString).split(":").map(Number);
     return new Date(year, month - 1, day, hour || 0, minute || 0);
+  }
+
+  /* 日本当地（JST）日期：跨天后按天刷新官方赛程用 */
+  function jstDayKey() {
+    return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  }
+
+  function startTimestamp(date, timeJst) {
+    if (!date || !/^(\d{1,2}):(\d{2})$/.test(String(timeJst || "").trim())) return NaN;
+    const parsed = Date.parse(`${date}T${String(timeJst).trim()}:00+09:00`);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
+  /* 统一判定场次状态：官方状态优先，但时间已过则强制归档为已结束，
+     保证「关注」里的比赛打完就自动挪进「已结束」，不用等官网更新。 */
+  function deriveStatus(event, date) {
+    if (event.status === "cancelled") return "cancelled";
+    if (event.status === "finished") return "finished";
+    const start = startTimestamp(date, event.timeJst);
+    if (!Number.isFinite(start)) return event.status || "upcoming";
+    const now = Date.now();
+    if (now >= start + FINISHED_AFTER_MS) return "finished";
+    if (now >= start) return "live";
+    return "upcoming";
+  }
+
+  function isDone(event) {
+    return event.status === "finished" || event.status === "cancelled";
   }
 
   function weekdayOf(dateString) {
@@ -180,7 +210,9 @@
   function startAutoSync() {
     window.setInterval(silentSync, SILENT_SYNC_MS);
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) silentSync();
+      if (document.hidden) return;
+      reconcileStatuses();   // 切回前台时先归档「后台期间已打完」的比赛
+      silentSync();
     });
   }
 
@@ -222,6 +254,38 @@
     } catch (error) {
       /* 隐私模式下不记状态，退化为到点即刷新 */
     }
+    loadOfficialSchedule(true);
+  }
+
+  /* 每分钟跑一次：只靠时间流逝也能把打完的比赛从「关注」挪进「已结束」 */
+  function reconcileStatuses(options = {}) {
+    if (!state.sessions.length) return;
+    let changed = 0;
+    let archived = 0;
+    state.sessions.forEach((session) => {
+      session.events.forEach((event) => {
+        const next = deriveStatus(event, session.date);
+        if (next === event.status) return;
+        if ((event.chn || event.focus) && (next === "finished" || next === "cancelled")) archived += 1;
+        event.status = next;
+        changed += 1;
+      });
+    });
+    if (!changed) return;
+    buildSessions();
+    if (archived && !options.silent) {
+      showScheduleToast(`${archived} 场关注比赛已结束，赛程与赛果已移至「已结束」`);
+    }
+  }
+
+  /* 跨入新的比赛日（JST）→ 立刻回源拉一次官方赛程与赛果 */
+  let lastJstDay = jstDayKey();
+  function maybeDayRolloverRefresh() {
+    const key = jstDayKey();
+    if (key === lastJstDay) return;
+    lastJstDay = key;
+    if (!state.data) return;
+    showScheduleToast(`已跨入新比赛日（${key}），正在同步官方赛程与赛果…`);
     loadOfficialSchedule(true);
   }
 
@@ -321,6 +385,11 @@
         };
       });
     }
+    /* 统一按「此刻」重算状态：开赛满 4 小时即归档为已结束，
+       这样「关注」里打完的比赛会自动挪进「已结束」，不必等官网更新赛果。 */
+    state.sessions.forEach((session) => {
+      session.events.forEach((event) => { event.status = deriveStatus(event, session.date); });
+    });
     renderSchedule();
     renderCountdown();
     renderRange();
@@ -427,10 +496,25 @@
       </div>`;
   }
 
+  /* 关注场次统计：用于「已结束自动归档」提示 */
+  function focusTally(sessions = state.sessions) {
+    let pending = 0;
+    let done = 0;
+    sessions.forEach((session) => {
+      session.events.forEach((event) => {
+        if (!event.chn && !event.focus) return;
+        if (isDone(event)) done += 1;
+        else pending += 1;
+      });
+    });
+    return { pending, done };
+  }
+
   function filterSessions(sessions) {
     if (state.filter === "focus") {
+      /* 只留还没结束的中国队 / 关注场次；打完的自动归档到「已结束」 */
       return sessions
-        .map((session) => ({ ...session, events: session.events.filter((event) => event.chn || event.focus) }))
+        .map((session) => ({ ...session, events: session.events.filter((event) => (event.chn || event.focus) && !isDone(event)) }))
         .filter((session) => session.events.length);
     }
     if (state.filter === "upcoming") {
@@ -440,7 +524,7 @@
     }
     if (state.filter === "finished") {
       return sessions
-        .map((session) => ({ ...session, events: session.events.filter((event) => event.status === "finished" || event.status === "cancelled") }))
+        .map((session) => ({ ...session, events: session.events.filter((event) => isDone(event)) }))
         .filter((session) => session.events.length);
     }
     return sessions;
@@ -473,13 +557,30 @@
         </div>
       </div>`;
 
+    const tally = focusTally();
+    const totalCount = state.sessions.reduce((sum, session) => sum + session.events.length, 0);
+    const upcomingCount = state.sessions.reduce((sum, session) => sum + session.events.filter((event) => event.status === "upcoming" || event.status === "live").length, 0);
+    const finishedCount = state.sessions.reduce((sum, session) => sum + session.events.filter((event) => isDone(event)).length, 0);
+    const chip = (filter, label, count) => `
+      <button type="button" class="chip${state.filter === filter ? " is-active" : ""}" data-filter="${filter}">${label}${count ? `<span class="chip__count">${count}</span>` : ""}</button>`;
+
     const chips = `
       <div class="chip-row" id="schedule-chips">
-        <button type="button" class="chip${state.filter === "focus" ? " is-active" : ""}" data-filter="focus">🇨🇳 中国队 / 关注</button>
-        <button type="button" class="chip${state.filter === "all" ? " is-active" : ""}" data-filter="all">全部</button>
-        <button type="button" class="chip${state.filter === "upcoming" ? " is-active" : ""}" data-filter="upcoming">即将开始</button>
-        <button type="button" class="chip${state.filter === "finished" ? " is-active" : ""}" data-filter="finished">已结束</button>
+        ${chip("focus", "🇨🇳 中国队 / 关注", tally.pending)}
+        ${chip("all", "全部", totalCount)}
+        ${chip("upcoming", "即将开始", upcomingCount)}
+        ${chip("finished", "已结束", finishedCount)}
       </div>`;
+
+    /* 打完的关注场次不再出现在本列表里，给一句说明 + 一键跳转到赛果 */
+    let archiveNotice = "";
+    if (state.filter === "focus" && tally.done) {
+      archiveNotice = `
+        <p class="notice notice--done" style="margin:0 0 12px">
+          已结束的 <strong>${tally.done}</strong> 场中国队 / 关注比赛已自动归档 —
+          <button type="button" class="link-btn" data-filter-jump="finished">到「已结束」看赛果 →</button>
+        </p>`;
+    }
 
     const hasChn = state.sessions.some((session) => session.events.some((event) => event.chn));
     let chnNotice = "";
@@ -551,13 +652,15 @@
               </article>
             </div>`;
         }).join("")
-      : `<p class="schedule-empty">当前筛选下没有场次。</p>`;
+      : (state.filter === "focus" && tally.done)
+        ? `<p class="schedule-empty">关注场次已全部结束。<br><button type="button" class="link-btn" data-filter-jump="finished">到「已结束」看赛果 →</button></p>`
+        : `<p class="schedule-empty">当前筛选下没有场次。</p>`;
 
     const tzNote = competition.timezoneNote
       ? `<p class="notice notice--warn" style="margin-bottom:16px">${escapeHtml(competition.timezoneNote)}</p>`
       : "";
 
-    root.innerHTML = `${toolbar}${venueCard}${tzNote}${chips}${chnNotice}${sessionsHtml}`;
+    root.innerHTML = `${toolbar}${venueCard}${tzNote}${chips}${archiveNotice}${chnNotice}${sessionsHtml}`;
     setLiveStatus(state.live.status);
 
     /* 加 ?. 兜底：工具栏一旦因数据缺失没渲染，这里抛错会中断后面的展开按钮绑定 */
@@ -573,6 +676,12 @@
     /* root 本身不会被 innerHTML 替换，这里必须用覆盖式绑定：
        addEventListener 会在每次 renderSchedule 时累积，点击一次触发 N 次 toggle，偶数次等于没点 */
     root.onclick = (event) => {
+      const jump = event.target.closest("[data-filter-jump]");
+      if (jump && jump.dataset.filterJump) {
+        state.filter = jump.dataset.filterJump;
+        renderSchedule();
+        return;
+      }
       const more = event.target.closest("[data-date]");
       if (!more) return;
       const date = more.dataset.date;
@@ -706,5 +815,11 @@
 
   window.setInterval(() => { if (state.data) renderCountdown(); }, 30000);
   window.setInterval(maybeAutoRefresh, 60000);   // 每晚 22:00 自动刷新一次
+  /* 每分钟：跨入新比赛日就回源刷新一次；并按时间把打完的比赛归档到「已结束」 */
+  window.setInterval(() => {
+    if (!state.data) return;
+    maybeDayRolloverRefresh();
+    reconcileStatuses();
+  }, STATUS_EVAL_MS);
   startAutoSync();                               // 页面可见时每 3 分钟静默比对，官方一更新即同步
 })();

@@ -40,6 +40,39 @@
   line-height: 1.6;
 }
 .notice--warn { background: #fbeae5; color: #96452f; }
+.notice--done { background: #eef4ec; color: #2f5d43; }
+.notice--done strong { font-weight: 750; }
+
+/* 文字链按钮（归档提示里的「看赛果」） */
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-left: 2px;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.schedule-empty .link-btn { margin: 8px 0 0; }
+
+/* 筛选 chip 的计数徽标 */
+.chip__count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  min-width: 18px;
+  border-radius: 999px;
+  background: rgba(31, 61, 51, 0.09);
+  color: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+.chip.is-active .chip__count { background: rgba(255, 255, 255, 0.22); }
 
 /* ---------- 赛程 ---------- */
 .venue-card {
