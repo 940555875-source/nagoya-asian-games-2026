@@ -240,6 +240,60 @@
 .tag--done { background: rgba(19, 38, 47, 0.1); color: var(--muted); }
 .tag--muted { background: rgba(19, 38, 47, 0.05); color: var(--muted); font-weight: 650; }
 
+/* ---------- 出战人员（默认折叠，点击展开） ---------- */
+.roster {
+  flex: 1 1 100%;
+  margin-top: 2px;
+}
+.roster__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(31, 92, 107, 0.1);
+  color: #1f5c6b;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.roster__toggle:active { transform: scale(0.97); }
+.roster__badge { letter-spacing: 0.02em; }
+.roster__hint { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-weight: 650; }
+.roster__caret {
+  width: 0; height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform 0.16s ease;
+}
+.roster.is-open .roster__caret { transform: rotate(180deg); }
+.event-row.is-chn .roster__toggle { background: rgba(217, 43, 43, 0.12); color: #a01818; }
+
+.roster__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 7px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(19, 38, 47, 0.08);
+}
+.roster__col { flex: 1 1 150px; min-width: 0; }
+.roster__title {
+  margin: 0 0 5px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.roster__title.is-winner { color: #1f7a4d; }
+.roster__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.roster__item { font-size: 11.5px; line-height: 1.45; color: #33454c; word-break: break-word; }
+.roster__func { margin-left: 4px; font-size: 10px; color: var(--muted); }
+
 /* 赛程顶部工具条：官方同步状态 + 直达 + 刷新 */
 .schedule-toolbar {
   display: flex;

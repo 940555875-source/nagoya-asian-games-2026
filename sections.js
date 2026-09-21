@@ -31,7 +31,8 @@
     data: null,
     sessions: [],
     expanded: new Set(),
-    live: { status: "idle", data: null, updatedAt: "", error: "", refreshing: false, syncing: false }
+    live: { status: "idle", data: null, updatedAt: "", error: "", refreshing: false, syncing: false },
+    rosterOpen: new Set()      // 展开出战名单的场次 id
   };
 
   /* ---------- 工具 ---------- */
@@ -144,14 +145,18 @@
     return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  /* 官方对阵公布进度：8/196 这种，未公布时提示会持续出现直到官网更新 */
+  /* 官方对阵 / 出战名单公布进度：8/196 这种，未公布时提示会持续出现直到官网更新 */
   function rosterText() {
     const live = state.live.data;
     if (!live || !Array.isArray(live.matches)) return "";
     const total = live.total || live.matches.length;
     const published = live.rosterCount || 0;
-    if (!published) return " · 对阵待公布";
-    return published >= total ? "" : ` · 已公布 ${published}/${total} 场对阵`;
+    const parts = [];
+    if (!published) parts.push("对阵待公布");
+    else if (published < total) parts.push(`已公布 ${published}/${total} 场对阵`);
+    const withPlayers = live.playerCount || 0;
+    if (withPlayers) parts.push(`出战名单 ${withPlayers} 场`);
+    return parts.length ? ` · ${parts.join(" · ")}` : "";
   }
 
   function setLiveStatus(status) {
@@ -216,6 +221,22 @@
     });
   }
 
+  /* 与上一份数据对比，只报增量：出战人员 / 对阵 / 赛果 */
+  function updateSummary(previous, next) {
+    if (!previous || !Array.isArray(previous.matches) || !previous.matches.length) return "";
+    const withPlayers = (data) => (data.matches || []).filter((match) => (match.home?.players || []).length || (match.away?.players || []).length).length;
+    const withResult = (data) => (data.matches || []).filter((match) => match.home?.result || match.away?.result).length;
+    const players = withPlayers(next) - withPlayers(previous);
+    const roster = (next.rosterCount || 0) - (previous.rosterCount || 0);
+    const results = withResult(next) - withResult(previous);
+    const parts = [];
+    if (players > 0) parts.push(`新增 ${players} 场出战人员`);
+    if (roster > 0) parts.push(`新增 ${roster} 场对阵`);
+    if (results > 0) parts.push(`新增 ${results} 场赛果`);
+    if (!parts.length) return "";
+    return `官网已更新：${parts.join("，")}，已同步到本页`;
+  }
+
   async function loadOfficialSchedule(force = false) {
     if (state.live.refreshing) return;
     state.live.refreshing = true;
@@ -227,12 +248,17 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (!Array.isArray(data.matches) || !data.matches.length) throw new Error("官方暂无数据");
+      const previous = state.live.data;
       state.live.data = data;
       state.live.updatedAt = formatUpdatedAt(data.updatedAt);
       state.live.error = "";
       buildSessions();
       setLiveStatus("ok");
-      if (force && data.changedCount) showScheduleToast(`已同步官网最新数据：${data.changedCount} 场对阵 / 赛果有更新`);
+      /* 无论手动还是静默同步，只要官网新公布了出战人员 / 对阵 / 赛果就提示 */
+      const summary = force
+        ? (data.changedCount ? `已同步官网最新数据：${data.changedCount} 场有更新` : "")
+        : updateSummary(previous, data);
+      if (summary) showScheduleToast(summary);
     } catch (error) {
       state.live.error = error.message;
       // 官方接口不可用（离线版 / 同步失败）时，保留原赛程图信息
@@ -292,10 +318,11 @@
   /* ---------- 赛程数据整合 ---------- */
   function staticEventsOf(session, competition) {
     const focusEvents = competition?.focusEvents || [];
-    return (session.events || []).map((event) => {
+    return (session.events || []).map((event, index) => {
       const start = Date.parse(`${session.date}T${event.timeJst || "00:00"}:00+09:00`);
       const status = Number.isFinite(start) && Date.now() - start > 4 * 3600 * 1000 ? "finished" : "upcoming";
       return {
+        id: `static-${session.date}-${index}`,
         timeJst: event.timeJst || "",
         timeCst: toBeijingTime(event.timeJst),
         discipline: event.discipline || "",
@@ -305,8 +332,8 @@
         focus: Boolean(event.focus) || isFocusEvent(event, focusEvents),
         chn: /中国队|中国 /.test(`${event.name} ${event.stage || ""}`),
         status,
-        home: { org: "", name: "", result: "", winner: false },
-        away: { org: "", name: "", result: "", winner: false },
+        home: { org: "", name: "", result: "", winner: false, players: [] },
+        away: { org: "", name: "", result: "", winner: false, players: [] },
         court: "",
         source: "image"
       };
@@ -315,6 +342,7 @@
 
   function liveEventsOf(day) {
     return (day.matches || []).map((match) => ({
+      id: match.id || `${day.date}-${match.timeJst || ""}-${match.eventZh || ""}`,
       timeJst: match.timeJst || "",
       timeCst: match.timeCst || toBeijingTime(match.timeJst),
       discipline: match.discipline || "",
@@ -324,8 +352,8 @@
       focus: Boolean(match.focus),
       chn: Boolean(match.chn),
       status: match.status || "upcoming",
-      home: match.home || { org: "", name: "", result: "", winner: false },
-      away: match.away || { org: "", name: "", result: "", winner: false },
+      home: { ...(match.home || {}), players: match.home?.players || [] },
+      away: { ...(match.away || {}), players: match.away?.players || [] },
       court: match.court || "",
       source: "official"
     }));
@@ -469,6 +497,46 @@
       </span>`;
   }
 
+  /* ---------- 出战人员 ---------- */
+  function playersOf(side) {
+    return Array.isArray(side?.players) ? side.players.filter((player) => String(player?.name || "").trim()) : [];
+  }
+
+  function rosterColumns(event) {
+    const home = playersOf(event.home);
+    const away = playersOf(event.away);
+    const sideBlock = (side, players, isWinner, align) => {
+      if (!players.length) return "";
+      const title = sideLabel(side);
+      return `
+        <div class="roster__col roster__col--${align}">
+          <p class="roster__title${isWinner ? " is-winner" : ""}">${escapeHtml(title)}${isWinner ? " · 胜" : ""}</p>
+          <ul class="roster__list">
+            ${players.map((player) => `<li class="roster__item">${escapeHtml(player.name)}${player.func && !/athlete/i.test(player.func) ? `<span class="roster__func">${escapeHtml(player.func)}</span>` : ""}</li>`).join("")}
+          </ul>
+        </div>`;
+    };
+    return `${sideBlock(event.home, home, Boolean(event.home?.winner), "home")}${sideBlock(event.away, away, Boolean(event.away?.winner), "away")}`;
+  }
+
+  /* 官方列了出战人员就展示，默认折叠，点「出战名单」展开 / 收起 */
+  function rosterHtml(event) {
+    const home = playersOf(event.home);
+    const away = playersOf(event.away);
+    const total = home.length + away.length;
+    if (!total) return "";
+    const open = state.rosterOpen.has(event.id);
+    const winner = event.status === "finished" && (event.home?.winner || event.away?.winner);
+    return `
+      <div class="roster${open ? " is-open" : ""}${winner ? " has-winner" : ""}">
+        <button type="button" class="roster__toggle" data-roster="${escapeHtml(event.id || "")}" aria-expanded="${open ? "true" : "false"}" title="查看出战人员">
+          <span class="roster__badge">出战 ${total} 人</span>
+          <span class="roster__hint">${open ? "收起名单" : "展开名单"}<i class="roster__caret" aria-hidden="true"></i></span>
+        </button>
+        <div class="roster__body"${open ? "" : " hidden"}>${rosterColumns(event)}</div>
+      </div>`;
+  }
+
   function statusTag(event) {
     if (event.status === "live") return `<span class="tag tag--live">进行中</span>`;
     if (event.status === "finished") return `<span class="tag tag--done">已结束</span>`;
@@ -491,6 +559,7 @@
             ${event.court ? `<span class="tag tag--muted">${escapeHtml(event.court)}</span>` : ""}
             ${event.source === "image" ? `<span class="tag tag--muted">原赛程图</span>` : ""}
           </div>
+          ${rosterHtml(event)}
         </div>
         <div class="event-side">${scoreHtml(event)}</div>
       </div>`;
@@ -680,6 +749,16 @@
       if (jump && jump.dataset.filterJump) {
         state.filter = jump.dataset.filterJump;
         renderSchedule();
+        return;
+      }
+      const roster = event.target.closest("[data-roster]");
+      if (roster) {
+        const id = roster.dataset.roster;
+        if (id) {
+          if (state.rosterOpen.has(id)) state.rosterOpen.delete(id);
+          else state.rosterOpen.add(id);
+          renderSchedule();
+        }
         return;
       }
       const more = event.target.closest("[data-date]");
