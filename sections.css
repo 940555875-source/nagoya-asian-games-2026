@@ -281,6 +281,8 @@
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(19, 38, 47, 0.08);
 }
+/* display:flex 会压过 hidden 属性的 UA 默认 display:none，必须显式声明，否则收起按钮点了没反应 */
+.roster__body[hidden] { display: none; }
 .roster__col { flex: 1 1 150px; min-width: 0; }
 .roster__title {
   margin: 0 0 5px;
@@ -293,6 +295,20 @@
 .roster__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
 .roster__item { font-size: 11.5px; line-height: 1.45; color: #33454c; word-break: break-word; }
 .roster__func { margin-left: 4px; font-size: 10px; color: var(--muted); }
+
+/* 团体赛出场阵容（官网 Start list 的 MATCH 1–5） */
+.roster__lineups { flex: 1 1 100%; display: flex; flex-direction: column; gap: 6px; }
+.roster__sub { padding: 6px 8px; border-radius: 8px; background: rgba(19, 38, 47, 0.04); }
+.roster__sub-label { margin: 0 0 3px; font-size: 10.5px; font-weight: 750; letter-spacing: .04em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.roster__sub-status { font-weight: 650; color: #1f7a4d; }
+.roster__sub-status--live { color: #d92b2b; }
+.roster__sub-vs { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 11.5px; line-height: 1.5; color: #33454c; }
+.roster__sub-side { min-width: 0; }
+.roster__sub-side b { font-weight: 760; margin-right: 3px; }
+.roster__sub-side.is-winner { color: #1f7a4d; }
+.roster__sub-colon { color: var(--muted); font-size: 10.5px; }
+.event-row.is-chn .roster__sub-side b { color: #a01818; }
+.event-row.is-chn .roster__sub-side.is-winner { color: #1f7a4d; }
 
 /* 赛程顶部工具条：官方同步状态 + 直达 + 刷新 */
 .schedule-toolbar {

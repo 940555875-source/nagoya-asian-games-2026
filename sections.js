@@ -156,6 +156,8 @@
     else if (published < total) parts.push(`已公布 ${published}/${total} 场对阵`);
     const withPlayers = live.playerCount || 0;
     if (withPlayers) parts.push(`出战名单 ${withPlayers} 场`);
+    const withLineups = live.lineupCount || 0;
+    if (withLineups) parts.push(`出场阵容 ${withLineups} 场`);
     return parts.length ? ` · ${parts.join(" · ")}` : "";
   }
 
@@ -226,11 +228,14 @@
     if (!previous || !Array.isArray(previous.matches) || !previous.matches.length) return "";
     const withPlayers = (data) => (data.matches || []).filter((match) => (match.home?.players || []).length || (match.away?.players || []).length).length;
     const withResult = (data) => (data.matches || []).filter((match) => match.home?.result || match.away?.result).length;
+    const withLineups = (data) => (data.matches || []).filter((match) => (match.subMatches || []).some((sub) => (sub.home?.players || []).length || (sub.away?.players || []).length)).length;
     const players = withPlayers(next) - withPlayers(previous);
     const roster = (next.rosterCount || 0) - (previous.rosterCount || 0);
     const results = withResult(next) - withResult(previous);
+    const lineups = withLineups(next) - withLineups(previous);
     const parts = [];
     if (players > 0) parts.push(`新增 ${players} 场出战人员`);
+    if (lineups > 0) parts.push(`新增 ${lineups} 场出场阵容`);
     if (roster > 0) parts.push(`新增 ${roster} 场对阵`);
     if (results > 0) parts.push(`新增 ${results} 场赛果`);
     if (!parts.length) return "";
@@ -354,6 +359,7 @@
       status: match.status || "upcoming",
       home: { ...(match.home || {}), players: match.home?.players || [] },
       away: { ...(match.away || {}), players: match.away?.players || [] },
+      subMatches: Array.isArray(match.subMatches) ? match.subMatches : [],
       court: match.court || "",
       source: "official"
     }));
@@ -519,21 +525,46 @@
     return `${sideBlock(event.home, home, Boolean(event.home?.winner), "home")}${sideBlock(event.away, away, Boolean(event.away?.winner), "away")}`;
   }
 
+  /* 团体赛出场阵容行：官网「Start list」页签的 MATCH 1–5（单打一人，双打两人） */
+  function lineupRows(event) {
+    return (event.subMatches || [])
+      .filter((sub) => playersOf(sub.home).length || playersOf(sub.away).length)
+      .map((sub) => {
+        const homeNames = playersOf(sub.home).map((player) => player.name).join(" / ");
+        const awayNames = playersOf(sub.away).map((player) => player.name).join(" / ");
+        const statusTag = sub.status === "finished"
+          ? `<span class="roster__sub-status">已结束</span>`
+          : (sub.status === "live" ? `<span class="roster__sub-status roster__sub-status--live">进行中</span>` : "");
+        return `
+          <div class="roster__sub">
+            <p class="roster__sub-label">${escapeHtml(sub.label || "")}${sub.type ? ` · ${escapeHtml(sub.type)}` : ""}${statusTag}</p>
+            <div class="roster__sub-vs">
+              <span class="roster__sub-side${sub.home?.winner ? " is-winner" : ""}"><b>${escapeHtml(sub.home?.org || "")}</b> ${escapeHtml(homeNames)}</span>
+              <span class="roster__sub-colon">vs</span>
+              <span class="roster__sub-side${sub.away?.winner ? " is-winner" : ""}"><b>${escapeHtml(sub.away?.org || "")}</b> ${escapeHtml(awayNames)}</span>
+            </div>
+          </div>`;
+      }).join("");
+  }
+
   /* 官方列了出战人员就展示，默认折叠，点「出战名单」展开 / 收起 */
   function rosterHtml(event) {
     const home = playersOf(event.home);
     const away = playersOf(event.away);
     const total = home.length + away.length;
-    if (!total) return "";
+    const lineup = lineupRows(event);
+    if (!total && !lineup) return "";
     const open = state.rosterOpen.has(event.id);
     const winner = event.status === "finished" && (event.home?.winner || event.away?.winner);
+    const teamColumns = rosterColumns(event);
+    const lineupCount = (event.subMatches || []).filter((sub) => playersOf(sub.home).length || playersOf(sub.away).length).length;
     return `
       <div class="roster${open ? " is-open" : ""}${winner ? " has-winner" : ""}">
         <button type="button" class="roster__toggle" data-roster="${escapeHtml(event.id || "")}" aria-expanded="${open ? "true" : "false"}" title="查看出战人员">
-          <span class="roster__badge">出战 ${total} 人</span>
+          <span class="roster__badge">${total ? `出战 ${total} 人` : `出场阵容 ${lineupCount} 场`}</span>
           <span class="roster__hint">${open ? "收起名单" : "展开名单"}<i class="roster__caret" aria-hidden="true"></i></span>
         </button>
-        <div class="roster__body"${open ? "" : " hidden"}>${rosterColumns(event)}</div>
+        <div class="roster__body"${open ? "" : " hidden"}>${lineup ? `<div class="roster__lineups">${lineup}</div>` : ""}${teamColumns}</div>
       </div>`;
   }
 
