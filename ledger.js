@@ -5,7 +5,7 @@
   const DEFAULT_SETTINGS = Object.freeze({
     baseCurrency: "CNY",
     commonCurrencies: ["JPY", "HKD", "EUR", "CHF"],
-    lastCurrency: "CNY"
+    lastCurrency: "JPY" // 日本当地消费默认记日元，再按汇率自动折合人民币入账
   });
   const CATEGORIES = Object.freeze(["餐饮", "交通", "住宿", "门票", "购物", "其他"]);
   const AVATAR_COLORS = Object.freeze([
@@ -278,7 +278,8 @@
         .filter((code) => CURRENCY_BY_CODE.has(code) && code !== baseCurrency)
     )];
     const availableCurrencies = new Set([baseCurrency, ...commonCurrencies]);
-    const requestedLast = String(raw.settings?.lastCurrency || baseCurrency).toUpperCase();
+    // 没存过设置时沿用默认币种（日本行程默认记日元），否则退回本位币
+    const requestedLast = String(raw.settings?.lastCurrency || fallback.settings.lastCurrency || baseCurrency).toUpperCase();
     const lastCurrency = availableCurrencies.has(requestedLast) ? requestedLast : baseCurrency;
     const bills = (Array.isArray(raw.bills) ? raw.bills : []).flatMap((bill) => {
       const originalAmountCents = Number(bill?.originalAmountCents);
@@ -296,6 +297,8 @@
         originalAmountCents,
         baseAmountCents,
         currency,
+        fxRate: Number.isFinite(Number(bill?.fxRate)) ? Number(bill.fxRate) : null,
+        fxDate: typeof bill?.fxDate === "string" ? bill.fxDate : "",
         category,
         note: typeof bill.note === "string" ? bill.note.trim().slice(0, 160) : "",
         orderedAt: typeof bill.orderedAt === "string" ? bill.orderedAt : "",
@@ -522,6 +525,139 @@
     ].filter((code) => CURRENCY_BY_CODE.has(code)))];
   }
 
+  /* ---------- 汇率：填外币时自动折合本位币 ---------- */
+  const FX_CACHE_KEY = "nagoya-2026:fx";              // 首页「汇率」卡片的缓存，优先复用
+  const FX_FALLBACK_KEY = "nagoya-2026:ledger-fx";    // 记帐自己拉到汇率时的兜底缓存
+  let fxState = { base: "", rates: {}, date: "", at: 0 };
+  let fxPending = new Map();
+  let baseAmountTouched = false;                      // 用户手改过折合金额就不再覆盖
+
+  function readFxEntry(key) {
+    try {
+      const raw = globalThis.localStorage?.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || !parsed.payload?.rates) return null;
+      const at = Date.parse(parsed.at || "");
+      return { ...parsed.payload, at: Number.isFinite(at) ? at : 0 };
+    } catch {
+      return null;
+    }
+  }
+
+  function loadFxState() {
+    if (Object.keys(fxState.rates || {}).length) return fxState;
+    const entry = readFxEntry(FX_CACHE_KEY) || readFxEntry(FX_FALLBACK_KEY);
+    if (entry) {
+      fxState = {
+        base: String(entry.base || "").toUpperCase(),
+        rates: entry.rates || {},
+        date: String(entry.date || ""),
+        at: Number(entry.at) || 0
+      };
+    }
+    return fxState;
+  }
+
+  /* 支持正向 / 反向 / 交叉汇率，缓存里只有一张基准表也够用 */
+  function rateOf(from, to) {
+    if (!from || !to) return null;
+    if (from === to) return 1;
+    const state = loadFxState();
+    const rates = state.rates || {};
+    const direct = Number(rates[to]);
+    const inverse = Number(rates[from]);
+    if (state.base === from && Number.isFinite(direct) && direct > 0) return direct;
+    if (state.base === to && Number.isFinite(inverse) && inverse > 0) return 1 / inverse;
+    if (Number.isFinite(direct) && Number.isFinite(inverse) && inverse > 0) return direct / inverse;
+    return null;
+  }
+
+  function formatRate(rate) {
+    const value = Number(rate);
+    if (!Number.isFinite(value)) return "";
+    if (value >= 1) return value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+    if (value >= 0.01) return value.toFixed(4);
+    return value.toFixed(6);
+  }
+
+  function fxDateLabel() {
+    const date = loadFxState().date;
+    return date ? `${date} 参考价` : "";
+  }
+
+  async function ensureFxRate(from, to) {
+    const cached = rateOf(from, to);
+    if (Number.isFinite(cached)) return cached;
+    const key = `${from}>${to}`;
+    if (fxPending.has(key)) return fxPending.get(key);
+    const task = (async () => {
+      try {
+        const url = `https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(from)}&symbols=${encodeURIComponent(to)}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const rate = Number(data?.rates?.[to]);
+        if (!Number.isFinite(rate) || rate <= 0) throw new Error("缺少汇率字段");
+        fxState = { base: from, rates: { [to]: rate }, date: String(data.date || ""), at: Date.now() };
+        try {
+          globalThis.localStorage?.setItem(
+            FX_FALLBACK_KEY,
+            JSON.stringify({ at: new Date().toISOString(), payload: fxState })
+          );
+        } catch { /* 忽略存储失败 */ }
+        return rate;
+      } catch (error) {
+        console.warn("TravelLedger 汇率获取失败", error);
+        return null;
+      } finally {
+        fxPending.delete(key);
+      }
+    })();
+    fxPending.set(key, task);
+    return task;
+  }
+
+  function rateHintText(from, to) {
+    const rate = rateOf(from, to);
+    if (!Number.isFinite(rate)) return "未能获取汇率，请手动填写折合金额";
+    const date = fxDateLabel();
+    return `已按 1 ${from} ≈ ${formatRate(rate)} ${to} 自动换算${date ? `（${date}）` : ""}，可手动修改`;
+  }
+
+  /* 外币金额一填好就把折合本位币算出来，随手写随手入账 */
+  function syncConvertedAmount(form) {
+    if (!form || !ledgerData) return;
+    const currency = String(form.elements.currency?.value || "").toUpperCase();
+    const base = ledgerData.settings.baseCurrency;
+    const input = form.querySelector('[data-ledger-field="base-amount"]');
+    const hint = form.querySelector("[data-ledger-rate-hint]");
+    if (!currency || currency === base || !input) return;
+    const rate = rateOf(currency, base);
+    if (hint) hint.textContent = rateHintText(currency, base);
+    if (!Number.isFinite(rate)) return;
+    const cents = toCents(form.elements.originalAmount?.value);
+    if (!Number.isFinite(cents) || cents <= 0) return;
+    if (baseAmountTouched && String(input.value || "").trim()) return;
+    input.value = (Math.round(cents * rate) / 100).toFixed(2);
+  }
+
+  /* 汇率可能晚于记账渲染到位，到了就补算一次 */
+  function primeFxRate(form) {
+    if (!form || !ledgerData) return;
+    const currency = String(form.elements.currency?.value || "").toUpperCase();
+    const base = ledgerData.settings.baseCurrency;
+    if (!currency || currency === base) return;
+    syncConvertedAmount(form);
+    if (Number.isFinite(rateOf(currency, base))) return;
+    void ensureFxRate(currency, base).then(() => {
+      if (ledgerRoot?.contains(form)) {
+        syncConvertedAmount(form);
+        syncSplitSummary();
+      }
+    });
+  }
+
   function billShares(bill) {
     const participantIds = bill.participantIds.filter((id) => travelerById(id));
     if (!participantIds.length) return new Map();
@@ -679,9 +815,9 @@
               <span class="ledger-field-label">折合${escapeHtml(currencyByCode(baseCurrency).nameZh)}</span>
               <span class="ledger-converted-input-wrap">
                 <span class="ledger-converted-code">${escapeHtml(baseCurrency)}</span>
-                <input class="ledger-input" name="baseAmount" data-ledger-field="base-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="手动填写换算后的总金额" value="${escapeAttribute(editingBill && isForeign ? centsToInput(editingBill.baseAmountCents) : draft?.baseAmount || "")}" ${isForeign ? "required" : ""}>
+                <input class="ledger-input" name="baseAmount" data-ledger-field="base-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="输入金额后自动换算" value="${escapeAttribute(editingBill && isForeign ? centsToInput(editingBill.baseAmountCents) : draft?.baseAmount || "")}" aria-label="折合${escapeAttribute(currencyByCode(baseCurrency).nameZh)}金额，输入原币金额后自动换算">
               </span>
-              <small class="ledger-field-help">按付款当时采用的汇率手动填写</small>
+              <small class="ledger-field-help" data-ledger-rate-hint>${escapeHtml(isForeign ? rateHintText(currency, baseCurrency) : "")}</small>
             </label>
 
             <fieldset class="ledger-fieldset">
@@ -858,7 +994,7 @@
           </div>
           <div class="ledger-bill-amount">
             <strong>${escapeHtml(formatMoney(bill.originalAmountCents, bill.currency))}</strong>
-            ${bill.currency !== baseCurrency ? `<span>折合 ${escapeHtml(formatMoney(bill.baseAmountCents, baseCurrency))}</span>` : ""}
+            ${bill.currency !== baseCurrency ? `<span>折合 ${escapeHtml(formatMoney(bill.baseAmountCents, baseCurrency))}${Number.isFinite(Number(bill.fxRate)) ? `<small class="ledger-bill-rate">按 1 ${escapeHtml(bill.currency)} ≈ ${escapeHtml(formatRate(bill.fxRate))} ${escapeHtml(baseCurrency)}${bill.fxDate ? ` · ${escapeHtml(bill.fxDate)}` : ""}</small>` : ""}</span>` : ""}
           </div>
         </div>
         <div class="ledger-bill-people">
@@ -1185,8 +1321,10 @@
         ${renderSettingsDialog()}
         ${renderCurrencyDialog()}
       </div>`;
+    baseAmountTouched = false;
     syncSplitSummary();
     attachDialogBehavior();
+    primeFxRate(ledgerRoot.querySelector('[data-ledger-form="bill"]'));
     if (openDialogName) {
       const dialog = ledgerRoot.querySelector(`[data-ledger-dialog="${openDialogName}"]`);
       if (dialog) {
@@ -1297,10 +1435,13 @@
     const isForeign = select.value !== ledgerData.settings.baseCurrency;
     if (convertedField) convertedField.hidden = !isForeign;
     if (convertedInput) {
-      convertedInput.required = isForeign;
+      convertedInput.required = false; // 折合金额由汇率自动换算，不再强制手填
       if (!isForeign) convertedInput.value = "";
     }
+    baseAmountTouched = false;
     captureBillDraft();
+    syncConvertedAmount(form);
+    primeFxRate(form);
     syncSplitSummary();
   }
 
@@ -1398,8 +1539,13 @@
     const formData = new FormData(form);
     const currency = String(formData.get("currency") || "").toUpperCase();
     const originalAmountCents = toCents(formData.get("originalAmount"));
-    const isForeign = currency !== ledgerData.settings.baseCurrency;
-    const baseAmountCents = isForeign ? toCents(formData.get("baseAmount")) : originalAmountCents;
+    const baseCurrencyCode = ledgerData.settings.baseCurrency;
+    const isForeign = currency !== baseCurrencyCode;
+    const fxRate = isForeign ? await ensureFxRate(currency, baseCurrencyCode) : null;
+    let baseAmountCents = isForeign ? toCents(formData.get("baseAmount")) : originalAmountCents;
+    if (isForeign && (!baseAmountCents || baseAmountCents <= 0) && Number.isFinite(fxRate)) {
+      baseAmountCents = Math.round(originalAmountCents * fxRate);
+    }
     const category = String(formData.get("category") || "");
     const payerId = String(formData.get("payerId") || "");
     const participantIds = [...new Set(formData.getAll("participantIds").map(String))]
@@ -1415,8 +1561,10 @@
       return;
     }
     if (!baseAmountCents || baseAmountCents <= 0) {
-      setFormError(form, `请填写折合${currencyByCode(ledgerData.settings.baseCurrency).nameZh}的金额。`);
-      form.elements.baseAmount?.focus();
+      setFormError(form, Number.isFinite(fxRate)
+        ? `请输入正确的${currencyByCode(currency).nameZh}金额。`
+        : `未能获取汇率，请手动填写折合${currencyByCode(baseCurrencyCode).nameZh}的金额。`);
+      (Number.isFinite(fxRate) ? form.elements.originalAmount : form.elements.baseAmount)?.focus();
       return;
     }
     if (!CATEGORIES.includes(category)) {
@@ -1437,6 +1585,8 @@
       originalAmountCents,
       baseAmountCents,
       currency,
+      fxRate: Number.isFinite(fxRate) ? fxRate : null,
+      fxDate: fxDateLabel(),
       category,
       note: String(formData.get("note") || "").trim().slice(0, 160),
       orderedAt: String(formData.get("orderedAt") || ""),
@@ -1787,6 +1937,13 @@
     const memberForm = event.target.closest('[data-ledger-form="member-add"]');
     if (memberForm) syncMemberPreview(memberForm);
     if (event.target.closest('[data-ledger-form="bill"]')) {
+      if (event.target.matches('[data-ledger-field="original-amount"]')) {
+        baseAmountTouched = false;              // 改了原币金额 → 折合金额重新自动换算
+        syncConvertedAmount(event.target.closest("form"));
+      }
+      if (event.target.matches('[data-ledger-field="base-amount"]')) {
+        baseAmountTouched = true;               // 手改过折合金额 → 尊重用户输入
+      }
       captureBillDraft();
       syncSplitSummary();
     }

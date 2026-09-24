@@ -227,6 +227,7 @@ body[data-active-view="ledger"] .topbar { background: rgba(250, 251, 249, .93); 
 .ledger-bill-amount { display: grid; justify-items: end; gap: 3px; text-align: right; }
 .ledger-bill-amount strong { font-size: 16px; font-weight: 760; }
 .ledger-bill-amount span { color: var(--lake); font-size: 10px; }
+.ledger-bill-rate { display: block; margin-top: 2px; color: #9aa5a6; font-size: 9px; white-space: normal; }
 .ledger-bill-people { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 14px; margin-top: 11px; color: #98a4a5; font-size: 10px; }
 .ledger-bill-payer, .ledger-bill-participants { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 .ledger-bill-payer b, .ledger-bill-participants b { color: #6f7d7f; font-weight: 680; }
