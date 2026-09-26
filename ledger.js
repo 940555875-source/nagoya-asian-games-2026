@@ -1535,7 +1535,76 @@
     ));
   }
 
+  /* 短时间内重复记账检测：金额、分类、买单人、备注、时间越像，越可能是同一笔账记了两次。 */
+  const DUPLICATE_WINDOW_HOURS = 12;
+  const DUPLICATE_SCORE_THRESHOLD = 5;
+
+  function billTimestamp(bill) {
+    const source = bill?.orderedAt || bill?.createdAt || bill?.updatedAt || "";
+    if (!source) return null;
+    const parsed = new Date(source);
+    const time = parsed.getTime();
+    return Number.isNaN(time) ? null : time;
+  }
+
+  function billSimilarityScore(fields, bill, referenceTime) {
+    const oldTime = billTimestamp(bill);
+    if (oldTime == null) return 0;
+    const hours = Math.abs(referenceTime - oldTime) / 3600000;
+    if (hours > DUPLICATE_WINDOW_HOURS) return 0;
+    let score = hours <= 0.5 ? 2 : hours <= 2 ? 1.5 : hours <= 6 ? 1 : 0.5;
+    if (bill.currency === fields.currency && bill.originalAmountCents === fields.originalAmountCents) score += 3;
+    else if (bill.baseAmountCents === fields.baseAmountCents) score += 2;
+    else {
+      const gap = Math.abs(bill.baseAmountCents - fields.baseAmountCents);
+      if (gap <= Math.max(1, Math.round(fields.baseAmountCents * 0.01))) score += 1;
+    }
+    if (bill.category === fields.category) score += 1;
+    if (bill.payerId && bill.payerId === fields.payerId) score += 1;
+    const oldNote = normalizeSearch(bill.note);
+    const newNote = normalizeSearch(fields.note);
+    if (oldNote && newNote && (oldNote === newNote || oldNote.includes(newNote) || newNote.includes(oldNote))) score += 2;
+    const oldSplit = bill.participantIds || [];
+    const newSplit = fields.participantIds || [];
+    if (oldSplit.length === newSplit.length && oldSplit.every((id) => newSplit.includes(id))) score += 0.5;
+    return score;
+  }
+
+  function findSimilarBills(fields, ignoreId = "") {
+    const orderedTime = fields.orderedAt ? new Date(fields.orderedAt).getTime() : NaN;
+    const referenceTime = Number.isNaN(orderedTime) ? Date.now() : orderedTime;
+    return ledgerData.bills
+      .filter((bill) => bill.id !== ignoreId)
+      .map((bill) => ({ bill, score: billSimilarityScore(fields, bill, referenceTime) }))
+      .filter((entry) => entry.score >= DUPLICATE_SCORE_THRESHOLD)
+      .sort((first, second) => (
+        second.score - first.score
+        || (billTimestamp(second.bill) || 0) - (billTimestamp(first.bill) || 0)
+      ))
+      .slice(0, 3)
+      .map((entry) => entry.bill);
+  }
+
+  function describeBillForDuplicate(bill) {
+    const payer = travelerById(bill.payerId);
+    const baseCurrency = ledgerData.settings.baseCurrency;
+    const parts = [
+      escapeHtml(bill.category),
+      escapeHtml(formatMoney(bill.originalAmountCents, bill.currency))
+    ];
+    if (bill.currency !== baseCurrency) parts.push(`折合 ${escapeHtml(formatMoney(bill.baseAmountCents, baseCurrency))}`);
+    const meta = [formatBillDate(bill.orderedAt || bill.createdAt)];
+    if (payer) meta.push(`${payer.name}买单`);
+    if (bill.note) meta.push(bill.note);
+    return `
+      <li class="ledger-dup-row">
+        <span class="ledger-dup-main">${parts.join(" · ")}</span>
+        <span class="ledger-dup-meta">${escapeHtml(meta.join(" · "))}</span>
+      </li>`;
+  }
+
   async function submitBill(form) {
+    if (form.dataset.ledgerSubmitting === "1") return;   // 连点两次也不会记成两笔
     const formData = new FormData(form);
     const currency = String(formData.get("currency") || "").toUpperCase();
     const originalAmountCents = toCents(formData.get("originalAmount"));
@@ -1595,12 +1664,22 @@
       updatedAt: now
     };
     const billBeingEdited = ledgerData.bills.find((bill) => bill.id === editingBillId);
-    await mutateData((next) => {
+    if (!billBeingEdited) {
+      const duplicates = findSimilarBills(fields, "");
+      if (duplicates.length && !(await confirmDuplicateSave(duplicates, fields))) return;
+    }
+
+    const newBillId = makeId("bill");
+    const savedBillId = billBeingEdited ? billBeingEdited.id : newBillId;
+    form.dataset.ledgerSubmitting = "1";
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+    const saved = await mutateData((next) => {
       if (billBeingEdited) {
         const index = next.bills.findIndex((bill) => bill.id === billBeingEdited.id);
         if (index >= 0) next.bills[index] = { ...next.bills[index], ...fields };
       } else {
-        next.bills.push({ id: makeId("bill"), ...fields, createdAt: now });
+        next.bills.push({ id: newBillId, ...fields, createdAt: now });
         next.settings.lastCurrency = currency;
       }
     }, {
@@ -1611,6 +1690,33 @@
         billDraft = null;
       }
     });
+    form.dataset.ledgerSubmitting = "";
+    if (submitButton) submitButton.disabled = false;
+    if (!saved) return;
+
+    const choice = await showBillSavedDialog({ ...fields, id: savedBillId }, {
+      updated: Boolean(billBeingEdited)
+    });
+    if (choice === "view") revealBill(savedBillId);
+    else focusBillForm();
+  }
+
+  function focusBillForm() {
+    ledgerRoot?.querySelector('[data-ledger-form="bill"] [data-ledger-field="original-amount"]')
+      ?.focus({ preventScroll: false });
+  }
+
+  function revealBill(id) {
+    if (activeTab !== "entry") {
+      activeTab = "entry";
+      renderApp();
+    }
+    const row = billRowById(id);
+    if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.remove("ledger-bill-row--flash");
+    void row.offsetWidth;
+    row.classList.add("ledger-bill-row--flash");
   }
 
   async function submitMemberAdd(form) {
@@ -1730,41 +1836,122 @@
     }, { reason: "member-updated", message: "同行人信息已更新", afterSuccess() { editingMemberId = null; } });
   }
 
-  function confirmLedgerAction(message) {
+  function mountDialog({ className = "", ariaLabel = "", innerHTML = "" }) {
+    const dialog = document.createElement("dialog");
+    dialog.className = className ? `ledger-confirm-dialog ${className}` : "ledger-confirm-dialog";
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-label", ariaLabel || "提示");
+    dialog.innerHTML = innerHTML;
+    document.body.append(dialog);
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    return dialog;
+  }
+
+  function settleDialog(dialog) {
     return new Promise((resolve) => {
-      const dialog = document.createElement("dialog");
-      dialog.className = "ledger-confirm-dialog";
-      dialog.setAttribute("aria-modal", "true");
-      dialog.setAttribute("aria-label", "确认删除");
-      dialog.innerHTML = `<div class="ledger-confirm-card">
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        if (dialog.open && typeof dialog.close === "function") dialog.close();
+        dialog.remove();
+        resolve(value);
+      };
+      dialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        finish(null);
+      });
+      dialog.addEventListener("click", (event) => {
+        const choice = event.target.closest("[data-ledger-confirm], [data-ledger-saved]");
+        if (choice) {
+          finish(choice.dataset.ledgerConfirm === "confirm"
+            ? true
+            : choice.dataset.ledgerConfirm === "cancel"
+              ? false
+              : choice.dataset.ledgerSaved || null);
+          return;
+        }
+        if (event.target === dialog) finish(null);
+      });
+      const focusTarget = dialog.querySelector('[data-ledger-confirm="cancel"], [data-ledger-saved]');
+      requestAnimationFrame(() => focusTarget?.focus({ preventScroll: true }));
+    });
+  }
+
+  function confirmLedgerAction(message) {
+    return settleDialog(mountDialog({
+      ariaLabel: "确认删除",
+      innerHTML: `<div class="ledger-confirm-card">
         <p>${escapeHtml(message)}</p>
         <div class="ledger-confirm-actions">
           <button type="button" data-ledger-confirm="cancel">取消</button>
           <button type="button" class="ledger-confirm-danger" data-ledger-confirm="confirm">确认删除</button>
         </div>
-      </div>`;
-      let settled = false;
-      const finish = (confirmed) => {
-        if (settled) return;
-        settled = true;
-        if (dialog.open && typeof dialog.close === "function") dialog.close();
-        dialog.remove();
-        resolve(confirmed);
-      };
-      dialog.addEventListener("cancel", (event) => {
-        event.preventDefault();
-        finish(false);
-      });
-      dialog.addEventListener("click", (event) => {
-        const choice = event.target.closest("[data-ledger-confirm]");
-        if (choice) finish(choice.dataset.ledgerConfirm === "confirm");
-        else if (event.target === dialog) finish(false);
-      });
-      document.body.append(dialog);
-      if (typeof dialog.showModal === "function") dialog.showModal();
-      else dialog.setAttribute("open", "");
-      requestAnimationFrame(() => dialog.querySelector('[data-ledger-confirm="cancel"]')?.focus());
-    });
+      </div>`
+    })).then((value) => value === true);
+  }
+
+  /* 相近账单提醒：确认后才继续保存，取消则保留表单内容让用户核对。 */
+  function confirmDuplicateSave(duplicates, fields) {
+    const baseCurrency = ledgerData.settings.baseCurrency;
+    const summary = fields.currency === baseCurrency
+      ? formatMoney(fields.baseAmountCents, baseCurrency)
+      : `${formatMoney(fields.originalAmountCents, fields.currency)}（折合 ${formatMoney(fields.baseAmountCents, baseCurrency)}）`;
+    return settleDialog(mountDialog({
+      className: "ledger-duplicate-dialog",
+      ariaLabel: "确认是否重复记账",
+      innerHTML: `<div class="ledger-confirm-card">
+        <p class="ledger-confirm-title">这笔账可能重复了</p>
+        <p class="ledger-confirm-text">刚要记的是 <b>${escapeHtml(fields.category)} ${escapeHtml(summary)}</b>，
+          与下面${duplicates.length > 1 ? "这些" : "这笔"}账单很接近：</p>
+        <ul class="ledger-dup-list">${duplicates.map(describeBillForDuplicate).join("")}</ul>
+        <p class="ledger-confirm-text">如果是同一笔，请返回核对；确实是两笔，就继续保存。</p>
+        <div class="ledger-confirm-actions">
+          <button type="button" data-ledger-confirm="cancel">返回核对</button>
+          <button type="button" class="ledger-confirm-primary" data-ledger-confirm="confirm">仍要保存</button>
+        </div>
+      </div>`
+    })).then((value) => value === true);
+  }
+
+  /* 记账完成弹窗：把这笔账的关键信息回执给用户。 */
+  function showBillSavedDialog(bill, options = {}) {
+    const updated = Boolean(options.updated);
+    const baseCurrency = ledgerData.settings.baseCurrency;
+    const payer = travelerById(bill.payerId);
+    const participants = (bill.participantIds || []).map(travelerById).filter(Boolean);
+    const averageCents = participants.length
+      ? Math.floor(bill.baseAmountCents / participants.length)
+      : bill.baseAmountCents;
+    const rows = [
+      ["分类", escapeHtml(bill.category)],
+      ["金额", bill.currency === baseCurrency
+        ? escapeHtml(formatMoney(bill.originalAmountCents, bill.currency))
+        : `${escapeHtml(formatMoney(bill.originalAmountCents, bill.currency))} · 折合 ${escapeHtml(formatMoney(bill.baseAmountCents, baseCurrency))}`],
+      ["买单", escapeHtml(payer?.name || "未指定")],
+      ["分账", participants.length
+        ? `${escapeHtml(String(participants.length))} 人 · 每人约 ${escapeHtml(formatMoney(averageCents, baseCurrency))}`
+        : "未选择"]
+    ];
+    if (bill.note) rows.push(["备注", escapeHtml(bill.note)]);
+    return settleDialog(mountDialog({
+      className: "ledger-saved-dialog",
+      ariaLabel: updated ? "账单已更新" : "记账完成",
+      innerHTML: `<div class="ledger-saved-card">
+        <div class="ledger-saved-mark" aria-hidden="true">✓</div>
+        <p class="ledger-saved-title">${updated ? "账单已更新" : "记账完成"}</p>
+        <p class="ledger-saved-sub">${updated ? "修改已保存，结算会同步刷新" : "这笔花费已经记好了"}</p>
+        <div class="ledger-saved-summary">
+          ${rows.map(([label, value]) => `
+            <div class="ledger-saved-row"><span>${label}</span><b>${value}</b></div>`).join("")}
+        </div>
+        <div class="ledger-saved-actions">
+          <button type="button" data-ledger-saved="keep">继续记账</button>
+          <button type="button" class="ledger-saved-primary" data-ledger-saved="view">查看账单</button>
+        </div>
+      </div>`
+    }));
   }
 
   async function deleteMember(id) {

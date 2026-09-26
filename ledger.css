@@ -423,3 +423,38 @@ body[data-active-view="ledger"] .topbar { background: rgba(250, 251, 249, .93); 
   .ledger-member-edit-row-static .ledger-member-edit-actions { gap: 0; }
   .ledger-member-edit-actions .ledger-text-button, .ledger-member-edit-actions .ledger-icon-button { padding-inline: 4px; }
 }
+
+/* 记账完成回执弹窗：把刚记下的这笔账回执给用户，避免记完没反馈。 */
+.ledger-saved-dialog { width: min(100% - 40px, 400px); }
+.ledger-saved-card { padding: 24px 20px 18px; text-align: center; }
+.ledger-saved-mark { width: 46px; height: 46px; margin: 0 auto; display: grid; place-items: center; border-radius: 50%; background: #e6f2ef; color: #2b7d8c; font-size: 24px; font-weight: 800; line-height: 1; }
+.ledger-saved-title { margin: 12px 0 0; font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
+.ledger-saved-sub { margin: 5px 0 0; color: #869495; font-size: 12px; }
+.ledger-saved-summary { display: grid; gap: 7px; margin-top: 16px; text-align: left; }
+.ledger-saved-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 12px; border-radius: 12px; background: #f5f9f8; font-size: 13px; }
+.ledger-saved-row > span { flex: 0 0 auto; color: #869495; font-size: 11px; }
+.ledger-saved-row > b { min-width: 0; font-weight: 750; text-align: right; word-break: break-word; }
+.ledger-saved-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.ledger-saved-actions button { min-height: 46px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); font: inherit; font-size: 14px; font-weight: 720; cursor: pointer; }
+.ledger-saved-actions .ledger-saved-primary { border-color: rgba(40,123,144,.3); background: #eaf4f5; color: #2b7d8c; }
+
+/* 疑似重复记账提醒：列出相近账单，让用户自己判断是不是同一笔。 */
+.ledger-duplicate-dialog { width: min(100% - 40px, 420px); }
+.ledger-confirm-card .ledger-confirm-title { font-size: 17px; }
+.ledger-confirm-card .ledger-confirm-text { margin: 10px 0 0; color: #5f7275; font-size: 13px; font-weight: 500; line-height: 1.6; text-align: left; }
+.ledger-confirm-card .ledger-confirm-text b { font-weight: 750; color: var(--ink); }
+.ledger-dup-list { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+.ledger-dup-row { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid rgba(19,38,47,.08); border-radius: 13px; background: #f7faf9; }
+.ledger-dup-main { color: var(--ink); font-size: 14px; font-weight: 750; }
+.ledger-dup-meta { color: #869495; font-size: 11px; line-height: 1.5; }
+.ledger-confirm-actions .ledger-confirm-primary { border-color: rgba(40,123,144,.3); background: #eaf4f5; color: #2b7d8c; }
+
+/* 从回执弹窗跳到账单时，短暂高亮那一行。 */
+.ledger-bill-row--flash { animation: ledger-bill-flash 1.8s ease; }
+@keyframes ledger-bill-flash {
+  0%, 100% { background: transparent; box-shadow: none; }
+  15%, 55% { background: rgba(40,123,144,.1); box-shadow: 0 0 0 2px rgba(40,123,144,.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ledger-bill-row--flash { animation: none; }
+}
