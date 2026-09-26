@@ -152,7 +152,6 @@
   let editingNoteBillId = null;
   let pendingNoteSave = null;
   let noteOpenRequest = 0;
-  const expandedTransfers = new Set();               // 结算页里就地展开「怎么算的」的转账序号
   let mutationQueue = Promise.resolve();
 
   function normalizeSearch(value) {
@@ -750,108 +749,6 @@
     };
   }
 
-  /* —— 结算链路解释：把「谁转给谁」拆回账单级欠条，方便逐笔核对 —— */
-
-  function rawDebtEdges() {
-    const edges = new Map();
-    ledgerData.bills.forEach((bill) => {
-      if (!travelerById(bill.payerId)) return;
-      billShares(bill).forEach((amount, participantId) => {
-        if (participantId === bill.payerId || !amount) return;
-        const key = `${participantId}|${bill.payerId}`;
-        const entry = edges.get(key)
-          || { fromId: participantId, toId: bill.payerId, amountCents: 0, items: [] };
-        entry.amountCents += amount;
-        entry.items.push({
-          billId: bill.id,
-          category: bill.category,
-          note: bill.note,
-          amountCents: amount
-        });
-        edges.set(key, entry);
-      });
-    });
-    return [...edges.values()];
-  }
-
-  /* 同一对人之间的欠条先互相抵消，得到「抵消后的欠条网络」。 */
-  function netDebtEdges() {
-    const raw = rawDebtEdges();
-    const pairKeys = [...new Set(raw.map((edge) => [edge.fromId, edge.toId].sort().join("|")))];
-    return pairKeys.flatMap((pairKey) => {
-      const [first, second] = pairKey.split("|");
-      const forward = raw.find((edge) => edge.fromId === first && edge.toId === second);
-      const backward = raw.find((edge) => edge.fromId === second && edge.toId === first);
-      const forwardCents = forward?.amountCents || 0;
-      const backwardCents = backward?.amountCents || 0;
-      const diff = forwardCents - backwardCents;
-      if (diff === 0) return [];
-      return [{
-        fromId: diff > 0 ? first : second,
-        toId: diff > 0 ? second : first,
-        amountCents: Math.abs(diff),
-        items: (diff > 0 ? forward : backward).items,
-        offsetCents: Math.min(forwardCents, backwardCents)
-      }];
-    }).sort((first, second) => second.amountCents - first.amountCents);
-  }
-
-  /* 找一条 A → … → C 的欠条链路（取瓶颈最大的那条），用来说明「合并了哪几笔」。 */
-  function findDebtChain(edges, fromId, toId) {
-    const adjacency = new Map();
-    edges.forEach((edge) => {
-      if (!adjacency.has(edge.fromId)) adjacency.set(edge.fromId, []);
-      adjacency.get(edge.fromId).push(edge);
-    });
-    let best = null;
-    const visit = (nodeId, bottleneck, path, visited) => {
-      if (nodeId === toId) {
-        if (!best || bottleneck > best.bottleneck) best = { bottleneck, path: [...path] };
-        return;
-      }
-      (adjacency.get(nodeId) || []).forEach((edge) => {
-        if (visited.has(edge.toId)) return;
-        const nextBottleneck = Math.min(bottleneck, edge.amountCents);
-        if (best && nextBottleneck <= best.bottleneck) return;
-        visited.add(edge.toId);
-        path.push(edge);
-        visit(edge.toId, nextBottleneck, path, visited);
-        path.pop();
-        visited.delete(edge.toId);
-      });
-    };
-    visit(fromId, Infinity, [], new Set([fromId]));
-    return best && best.path.length ? best : null;
-  }
-
-  /* 本笔转账时点：A 还剩多少要付、C 还剩多少要收（两者取小就是本笔金额）。 */
-  function transferQueueState(stats, index) {
-    const transfer = stats.transfers[index];
-    if (!transfer) return null;
-    const fromRemaining = stats.transfers.slice(index)
-      .filter((entry) => entry.fromId === transfer.fromId)
-      .reduce((sum, entry) => sum + entry.amountCents, 0);
-    const toRemaining = stats.transfers.slice(index)
-      .filter((entry) => entry.toId === transfer.toId)
-      .reduce((sum, entry) => sum + entry.amountCents, 0);
-    return {
-      transfer,
-      fromRemaining,
-      toRemaining,
-      fromAfter: fromRemaining - transfer.amountCents,
-      toAfter: toRemaining - transfer.amountCents
-    };
-  }
-
-  function describeDebtItems(items) {
-    if (!items.length) return "";
-    const shown = items.slice(0, 4).map((item) => (
-      `${item.category}${item.note ? `·${item.note}` : ""} ${formatMoney(item.amountCents, ledgerData.settings.baseCurrency)}`
-    ));
-    if (items.length > shown.length) shown.push(`等 ${items.length} 笔`);
-    return shown.join("、");
-  }
-
   function renderAvatar(traveler, size = "normal") {
     if (!traveler) return "";
     return `<span class="ledger-avatar ledger-avatar-${escapeAttribute(size)}" style="--ledger-avatar-color:${escapeAttribute(traveler.color)}" aria-hidden="true">${escapeHtml(traveler.initial)}</span>`;
@@ -1177,13 +1074,65 @@
     }).join("");
   }
 
+  /* 通用小表格：第一列当标签列，tfoot 放合计 / 结论。 */
+  function renderLedgerTable(columns, rows, foot = "") {
+    return `
+      <div class="ledger-table-wrap">
+        <table class="ledger-table">
+          <thead>
+            <tr>${columns.map((column) => `<th scope="col">${column}</th>`).join("")}</tr>
+          </thead>
+          <tbody>
+            ${rows.length
+              ? rows.map((cells) => `<tr>${cells.map((cell, cellIndex) => (
+                  `<td${cellIndex === 0 ? ` scope="row" class="ledger-cell-label"` : ""}>${cell}</td>`
+                )).join("")}</tr>`).join("")
+              : `<tr><td class="ledger-cell-empty" colspan="${columns.length}">暂无可核对的数据</td></tr>`}
+          </tbody>
+          ${foot ? `<tfoot>${foot}</tfoot>` : ""}
+        </table>
+      </div>`;
+  }
+
   function renderStatsPage() {
     const stats = calculateStats();
     const baseCurrency = ledgerData.settings.baseCurrency;
-    /* 账单变动后转账笔数可能变少，顺手丢掉越界的展开序号。 */
-    for (const index of [...expandedTransfers]) {
-      if (index >= stats.transfers.length) expandedTransfers.delete(index);
-    }
+    const money = (cents) => escapeHtml(formatMoney(cents, baseCurrency));
+
+    /* 总账对账：把每个人的实付 / 应分摊 / 净额与转账方案摆在一起验算，结清后应全部归零。 */
+    const payMap = new Map();
+    const receiveMap = new Map();
+    stats.transfers.forEach((transfer) => {
+      payMap.set(transfer.fromId, (payMap.get(transfer.fromId) || 0) + transfer.amountCents);
+      receiveMap.set(transfer.toId, (receiveMap.get(transfer.toId) || 0) + transfer.amountCents);
+    });
+    const leftOf = (member) => member.netCents
+      - (receiveMap.get(member.traveler.id) || 0)
+      + (payMap.get(member.traveler.id) || 0);
+    const auditRows = stats.members.map((member) => {
+      const payCents = payMap.get(member.traveler.id) || 0;
+      const receiveCents = receiveMap.get(member.traveler.id) || 0;
+      const leftCents = leftOf(member);
+      return [
+        escapeHtml(member.traveler.name),
+        money(member.paidCents),
+        money(member.owedCents),
+        member.netCents > 0
+          ? `<span class="ledger-audit-in">应收 ${money(member.netCents)}</span>`
+          : member.netCents < 0
+            ? `<span class="ledger-audit-out">应付 ${money(-member.netCents)}</span>`
+            : "已结清",
+        `${money(receiveCents)} / ${money(payCents)}`,
+        leftCents === 0 ? `<b class="ledger-audit-in">✓ ${money(0)}</b>` : `<b class="ledger-audit-out">${money(leftCents)}</b>`
+      ];
+    });
+    const paidTotal = stats.members.reduce((sum, member) => sum + member.paidCents, 0);
+    const owedTotal = stats.members.reduce((sum, member) => sum + member.owedCents, 0);
+    const netTotal = stats.members.reduce((sum, member) => sum + member.netCents, 0);
+    const transferTotal = stats.transfers.reduce((sum, transfer) => sum + transfer.amountCents, 0);
+    const auditLeftTotal = stats.members.reduce((sum, member) => sum + leftOf(member), 0);
+    const auditBalanced = netTotal === 0 && auditLeftTotal === 0
+      && paidTotal === stats.totalCents && owedTotal === stats.totalCents;
     return `
       <section class="ledger-tab-panel" data-ledger-panel="stats" role="tabpanel" aria-labelledby="ledger-stats-tab" ${activeTab === "stats" ? "" : "hidden"}>
         <section class="ledger-stats-overview" aria-labelledby="ledger-stats-title">
@@ -1202,35 +1151,16 @@
           </div>
           ${stats.transfers.length ? `
             <div class="ledger-transfer-list">
-              ${stats.transfers.map((transfer, index) => {
+              ${stats.transfers.map((transfer) => {
                 const from = travelerById(transfer.fromId);
                 const to = travelerById(transfer.toId);
-                const open = expandedTransfers.has(index);
                 return `
-                  <div class="ledger-transfer-item${open ? " is-open" : ""}">
-                    <button class="ledger-transfer-row" type="button" data-ledger-action="explain-transfer" data-ledger-index="${index}" aria-expanded="${open}" aria-controls="ledger-transfer-detail-${index}" aria-label="${open ? "收起" : "查看"}${escapeAttribute(from?.name || "")} 转给 ${escapeAttribute(to?.name || "")} 的计算明细">
-                      <span class="ledger-transfer-person">
-                        ${renderAvatar(from)}
-                        <span><strong>${escapeHtml(from?.name || "")}</strong><small>转给 ${escapeHtml(to?.name || "")}</small></span>
-                      </span>
-                      <span class="ledger-transfer-amount-wrap">
-                        <strong class="ledger-transfer-amount">${escapeHtml(formatMoney(transfer.amountCents, baseCurrency))}</strong>
-                        <small class="ledger-transfer-hint">${open ? "收起明细 ⌃" : "怎么算的 ⌄"}</small>
-                      </span>
-                    </button>
-                    <div class="ledger-transfer-detail" id="ledger-transfer-detail-${index}" ${open ? "" : "hidden"}>
-                      <div class="ledger-transfer-detail-inner">
-                        <div class="ledger-detail-head">
-                          <p class="ledger-detail-title">${escapeHtml(from?.name || "")} → ${escapeHtml(to?.name || "")} 怎么算的</p>
-                          <p class="ledger-detail-sub">第 ${index + 1} 笔 · 共 ${stats.transfers.length} 笔转账</p>
-                        </div>
-                        ${open ? transferDetailTables(index) : ""}
-                        ${open ? `
-                          <div class="ledger-detail-actions">
-                            <button type="button" data-ledger-action="zoom-transfer" data-ledger-index="${index}">放大查看</button>
-                          </div>` : ""}
-                      </div>
-                    </div>
+                  <div class="ledger-transfer-row">
+                    <span class="ledger-transfer-person">
+                      ${renderAvatar(from)}
+                      <span><strong>${escapeHtml(from?.name || "")}</strong><small>转给 ${escapeHtml(to?.name || "")}</small></span>
+                    </span>
+                    <strong class="ledger-transfer-amount">${escapeHtml(formatMoney(transfer.amountCents, baseCurrency))}</strong>
                   </div>`;
               }).join("")}
             </div>` : `
@@ -1262,6 +1192,42 @@
                   </div>
                 </details>`).join("")}
             </div>` : `<div class="ledger-empty-state"><p>添加同行人后，这里会显示每个人的收支。</p></div>`}
+        </section>
+
+        <section class="ledger-audit-section" aria-labelledby="ledger-audit-title">
+          <div class="ledger-section-heading">
+            <div>
+              <p class="ledger-section-kicker">总账对账</p>
+              <h2 id="ledger-audit-title">账能不能对上</h2>
+            </div>
+            <span class="ledger-soft-count${auditBalanced ? " ledger-soft-count-ok" : " ledger-soft-count-warn"}">${auditBalanced ? "已配平" : "有差额"}</span>
+          </div>
+          ${renderLedgerTable(
+            ["成员", "实付", "应分摊", "净额", "转账（收 / 付）", "结清后"],
+            auditRows,
+            `<tr>
+              <th scope="row" class="ledger-cell-label">合计</th>
+              <td>${escapeHtml(formatMoney(paidTotal, baseCurrency))}</td>
+              <td>${escapeHtml(formatMoney(owedTotal, baseCurrency))}</td>
+              <td>${escapeHtml(formatMoney(netTotal, baseCurrency))}</td>
+              <td>${escapeHtml(formatMoney(transferTotal, baseCurrency))} / ${escapeHtml(formatMoney(transferTotal, baseCurrency))}</td>
+              <td><b>${escapeHtml(formatMoney(auditLeftTotal, baseCurrency))}</b></td>
+            </tr>`
+          )}
+          ${renderLedgerTable(
+            ["核对项", "金额", "结果"],
+            [
+              ["总支出", escapeHtml(formatMoney(stats.totalCents, baseCurrency)), "—"],
+              ["实付合计", escapeHtml(formatMoney(paidTotal, baseCurrency)), paidTotal === stats.totalCents ? "✓ 与总支出一致" : "✗ 与总支出不符"],
+              ["分摊合计", escapeHtml(formatMoney(owedTotal, baseCurrency)), owedTotal === stats.totalCents ? "✓ 与总支出一致" : "✗ 与总支出不符"],
+              ["转账合计", `${escapeHtml(formatMoney(transferTotal, baseCurrency))}（${stats.transfers.length} 笔）`, "—"]
+            ]
+          )}
+          <p class="ledger-audit-note">
+            每人「结清后」都应为 ${escapeHtml(formatMoney(0, baseCurrency))}：
+            净额 = 实付 − 应分摊；应收的人收回应收额、应付的人付出应付额后归零。
+            分摊按参与人数平分，余数分给靠前的人，每人最多差 1 分。
+          </p>
         </section>
       </section>`;
   }
@@ -2081,232 +2047,6 @@
   }
 
   /* 把一笔转账拆回「净额 → 撮合 → 抵消链路 → 账单级欠条」，全部用表格列出，方便逐格核对。 */
-  function transferDetailTables(index) {
-    const stats = calculateStats();
-    const state = transferQueueState(stats, index);
-    if (!state) return "";
-    const baseCurrency = ledgerData.settings.baseCurrency;
-    const money = (cents) => escapeHtml(formatMoney(cents, baseCurrency));
-    const { transfer, fromRemaining, toRemaining, fromAfter, toAfter } = state;
-    const from = travelerById(transfer.fromId);
-    const to = travelerById(transfer.toId);
-    const memberById = new Map(stats.members.map((member) => [member.traveler.id, member]));
-    const fromMember = memberById.get(transfer.fromId);
-    const toMember = memberById.get(transfer.toId);
-    const edges = netDebtEdges();
-    const chain = findDebtChain(edges, transfer.fromId, transfer.toId);
-    const directEdge = edges.find((edge) => edge.fromId === transfer.fromId && edge.toId === transfer.toId);
-    const nameOf = (person) => escapeHtml(person?.name || "已移除");
-    const itemsOf = (items) => escapeHtml(describeDebtItems(items));
-
-    /* 统一的表格骨架：第一列当标签列，tfoot 放小计/结论。 */
-    const renderTable = (columns, rows, foot) => `
-      <div class="ledger-detail-table-wrap">
-        <table class="ledger-detail-table">
-          <thead>
-            <tr>${columns.map((column) => `<th scope="col">${column}</th>`).join("")}</tr>
-          </thead>
-          <tbody>
-            ${rows.length
-              ? rows.map((cells) => `<tr>${cells.map((cell, cellIndex) => (
-                  `<td${cellIndex === 0 ? ` scope="row" class="ledger-detail-cell-label"` : ""}>${cell}</td>`
-                )).join("")}</tr>`).join("")
-              : `<tr><td class="ledger-detail-empty" colspan="${columns.length}">没有可列出的记录</td></tr>`}
-          </tbody>
-          ${foot ? `<tfoot>${foot}</tfoot>` : ""}
-        </table>
-      </div>`;
-
-    /* ① 净额：实付 − 应分摊 = 净额 */
-    const netRows = [fromMember, toMember].filter(Boolean).map((member) => {
-      const isPayer = member.netCents < 0;
-      return [
-        nameOf(member.traveler),
-        money(member.paidCents),
-        money(member.owedCents),
-        isPayer ? `<b class="is-out">应付 ${money(-member.netCents)}</b>` : `<b class="is-in">应收 ${money(member.netCents)}</b>`
-      ];
-    });
-
-    /* ② 撮合：排队到这一笔时两边各剩多少，取小即为本笔金额 */
-    const matchRows = [
-      ["本笔前", `还需支付 ${money(fromRemaining)}`, `还需收回 ${money(toRemaining)}`],
-      ["本笔金额", `<b class="is-out">付出 ${money(transfer.amountCents)}</b>`, `<b class="is-in">收回 ${money(transfer.amountCents)}</b>`],
-      ["本笔后", fromAfter > 0 ? `还需支付 ${money(fromAfter)}` : "已付清", toAfter > 0 ? `还需收回 ${money(toAfter)}` : "已收清"]
-    ];
-    const matchFoot = `<tr>
-      <th scope="row" class="ledger-detail-cell-label">本笔 = min(两方剩余)</th>
-      <td colspan="2"><b>${money(transfer.amountCents)}</b></td>
-    </tr>`;
-
-    /* ③ 抵消链路：经由中间人时把链上的原始欠条逐段列出 */
-    const isChained = Boolean(chain && chain.path.length >= 2);
-    const chainTable = isChained
-      ? renderTable(
-        ["#", "欠钱的人", "收钱的人", "欠条金额", "来源账单"],
-        chain.path.map((edge, step) => [
-          String(step + 1),
-          nameOf(travelerById(edge.fromId)),
-          nameOf(travelerById(edge.toId)),
-          `<b>${money(edge.amountCents)}</b>`,
-          itemsOf(edge.items)
-        ]),
-        `<tr>
-          <th scope="row" class="ledger-detail-cell-label">合并结果</th>
-          <td colspan="4">${nameOf(from)} 直接转 ${nameOf(to)} <b>${money(transfer.amountCents)}</b>，少转 ${chain.path.length - 1} 笔</td>
-        </tr>`
-      )
-      : "";
-
-    const chainSection = isChained
-      ? `
-        <div class="ledger-detail-chain">
-          ${[nameOf(from), ...chain.path.map((edge) => nameOf(travelerById(edge.toId)))].map((label, step) => `
-            ${step === 0 ? "" : `<span class="ledger-detail-chain-arrow">→</span>`}
-            <span class="ledger-detail-chain-node">${label}</span>
-            ${step === 0 ? "" : `<em>${money(chain.path[step - 1].amountCents)}</em>`}
-          `).join("")}
-        </div>
-        <p class="ledger-detail-note">
-          这条链上最小的一段是 <b>${money(chain.bottleneck)}</b>：
-          原本要由 ${nameOf(from)} 转给中间人、中间人再转给 ${nameOf(to)}（${chain.path.length} 笔），首尾相接后合并成一笔。
-        </p>
-        ${chainTable}`
-      : `<p class="ledger-detail-note">${nameOf(from)} 与 ${nameOf(to)} 之间没有经由中间人的欠条链路，这笔是按两人的净额直接撮合出来的。</p>`;
-
-    const directSection = directEdge
-      ? renderTable(
-        ["关系", "金额", "来源账单", "说明"],
-        [[
-          `${nameOf(from)} → ${nameOf(to)}`,
-          `<b>${money(directEdge.amountCents)}</b>`,
-          itemsOf(directEdge.items),
-          isChained
-            ? "两人之间的直接欠条，已并入本笔"
-            : (directEdge.amountCents === transfer.amountCents ? "本笔就是按这条欠条转账" : `本笔是这条欠条的一部分`)
-        ]]
-      )
-      : "";
-
-    /* ④ 双方各自的全部欠条（已按同一对人互相抵消） */
-    const personTable = (personId) => {
-      const out = edges.filter((edge) => edge.fromId === personId);
-      const incoming = edges.filter((edge) => edge.toId === personId);
-      const outTotal = out.reduce((sum, edge) => sum + edge.amountCents, 0);
-      const inTotal = incoming.reduce((sum, edge) => sum + edge.amountCents, 0);
-      const rows = [
-        ...out.map((edge) => [
-          nameOf(travelerById(edge.toId)),
-          `<span class="is-out">应付</span>`,
-          `<b>${money(edge.amountCents)}</b>`,
-          edge.offsetCents ? `已抵消反向 ${money(edge.offsetCents)}` : "—",
-          itemsOf(edge.items)
-        ]),
-        ...incoming.map((edge) => [
-          nameOf(travelerById(edge.fromId)),
-          `<span class="is-in">应收</span>`,
-          `<b>${money(edge.amountCents)}</b>`,
-          edge.offsetCents ? `已抵消反向 ${money(edge.offsetCents)}` : "—",
-          itemsOf(edge.items)
-        ])
-      ];
-      return renderTable(
-        ["对象", "方向", "金额", "已抵消", "来源账单"],
-        rows,
-        `<tr>
-          <th scope="row" class="ledger-detail-cell-label">小计</th>
-          <td colspan="4">应收 ${money(inTotal)} − 应付 ${money(outTotal)} = 净额 <b>${money(inTotal - outTotal)}</b></td>
-        </tr>`
-      );
-    };
-
-    /* ⑤ 总账核对 */
-    const totalTransfers = stats.transfers.reduce((sum, entry) => sum + entry.amountCents, 0);
-    const paidTotal = stats.members.reduce((sum, member) => sum + member.paidCents, 0);
-    const owedTotal = stats.members.reduce((sum, member) => sum + member.owedCents, 0);
-
-    return `
-      <section class="ledger-detail-section">
-        <h3>① 两人的净额</h3>
-        ${renderTable(["成员", "实付", "应分摊", "净额"], netRows)}
-        <p class="ledger-detail-note">分摊 = 每笔账单按参与人数平分（余数分给靠前的人，每人最多差 1 分）。</p>
-      </section>
-
-      <section class="ledger-detail-section">
-        <h3>② 本笔金额怎么取</h3>
-        ${renderTable(["", nameOf(from), nameOf(to)], matchRows, matchFoot)}
-        <p class="ledger-detail-note">结账排队时取两方剩余的较小值；本笔之后没结清的部分由后面的转账补齐。</p>
-      </section>
-
-      <section class="ledger-detail-section">
-        <h3>③ 抵消链路</h3>
-        ${chainSection}
-        ${directSection}
-      </section>
-
-      <section class="ledger-detail-section">
-        <h3>④ ${nameOf(from)} 的欠条（抵消后）</h3>
-        ${personTable(transfer.fromId)}
-        <h3 class="ledger-detail-subheading">${nameOf(to)} 的欠条（抵消后）</h3>
-        ${personTable(transfer.toId)}
-      </section>
-
-      <section class="ledger-detail-section">
-        <h3>⑤ 总账核对</h3>
-        ${renderTable(["项目", "金额"], [
-          ["总支出", money(stats.totalCents)],
-          ["实付合计", money(paidTotal)],
-          ["分摊合计", money(owedTotal)],
-          ["转账合计", `${money(totalTransfers)}（${stats.transfers.length} 笔）`]
-        ])}
-        <p class="ledger-detail-note">实付合计 = 分摊合计 = 总支出，转账合计 = 所有「应付」之和，说明账目配平。</p>
-      </section>`;
-  }
-
-  /* 放大查看：把同一份表格放进弹窗，方便在小屏上完整核对。 */
-  function showTransferDetail(index) {
-    const stats = calculateStats();
-    const transfer = stats.transfers[index];
-    if (!transfer) return;
-    const baseCurrency = ledgerData.settings.baseCurrency;
-    const from = travelerById(transfer.fromId);
-    const to = travelerById(transfer.toId);
-    const nameOf = (person) => escapeHtml(person?.name || "已移除");
-    return settleDialog(mountDialog({
-      className: "ledger-detail-dialog",
-      ariaLabel: "转账计算明细",
-      innerHTML: `<div class="ledger-detail-card">
-        <div class="ledger-detail-head">
-          <div class="ledger-detail-people">
-            ${renderAvatar(from)}<span class="ledger-detail-arrow" aria-hidden="true">→</span>${renderAvatar(to)}
-          </div>
-          <p class="ledger-detail-title">${nameOf(from)} 转给 ${nameOf(to)} <b>${escapeHtml(formatMoney(transfer.amountCents, baseCurrency))}</b></p>
-          <p class="ledger-detail-sub">第 ${index + 1} 笔 · 共 ${stats.transfers.length} 笔转账</p>
-        </div>
-        ${transferDetailTables(index)}
-        <div class="ledger-detail-actions">
-          <button type="button" data-ledger-confirm="cancel">知道了</button>
-        </div>
-      </div>`
-    }));
-  }
-
-  /* 结算页就地展开 / 收起某一笔转账的计算表格。 */
-  function toggleTransferDetail(index) {
-    const wasOpen = expandedTransfers.has(index);
-    if (wasOpen) expandedTransfers.delete(index);
-    else expandedTransfers.add(index);
-    renderApp();
-    if (!wasOpen) {
-      requestAnimationFrame(() => {
-        const panel = ledgerRoot?.querySelector(`#ledger-transfer-detail-${index}`);
-        if (panel && typeof panel.scrollIntoView === "function") {
-          panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
-        }
-      });
-    }
-  }
-
   async function deleteMember(id) {
     const traveler = travelerById(id);
     if (!traveler) return;
@@ -2443,10 +2183,6 @@
     } else if (action === "cancel-edit") {
       editingBillId = null;
       renderApp();
-    } else if (action === "explain-transfer") {
-      toggleTransferDetail(Number(button.dataset.ledgerIndex || 0));
-    } else if (action === "zoom-transfer") {
-      showTransferDetail(Number(button.dataset.ledgerIndex || 0));
     } else if (action === "select-all-participants") {
       const form = button.closest("form");
       const inputs = [...form.querySelectorAll('input[name="participantIds"]')];
