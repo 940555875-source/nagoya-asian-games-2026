@@ -152,6 +152,8 @@
   let editingNoteBillId = null;
   let pendingNoteSave = null;
   let noteOpenRequest = 0;
+  /* 成员消费明细里就地展开的账单明细，键为 `<成员id>:paid` / `<成员id>:owed`。 */
+  const expandedMemberMetrics = new Set();
   let mutationQueue = Promise.resolve();
 
   function normalizeSearch(value) {
@@ -1094,6 +1096,72 @@
       </div>`;
   }
 
+  /* 「实际支付」= 这个人买单的账单；「个人应分摊」= 有他参与分账的账单。 */
+  function memberMetricBills(member, metric) {
+    const personId = member.traveler.id;
+    const timeOf = (bill) => bill.orderedAt || bill.createdAt || "";
+    return ledgerData.bills
+      .map((bill) => ({ bill, share: billShares(bill).get(personId) || 0 }))
+      .filter((entry) => (metric === "paid" ? entry.bill.payerId === personId : entry.share > 0))
+      .sort((first, second) => timeOf(second.bill).localeCompare(timeOf(first.bill)));
+  }
+
+  /* 点开后铺在指标下方的账单明细表：金额 / 本人分摊 / 备注 / 下单时间 / 买单人 / 分摊人。 */
+  function renderMemberMetricTable(member, metric) {
+    const baseCurrency = ledgerData.settings.baseCurrency;
+    const money = (cents) => escapeHtml(formatMoney(cents, baseCurrency));
+    const entries = memberMetricBills(member, metric);
+    const rows = entries.map(({ bill, share }) => {
+      const payer = travelerById(bill.payerId);
+      const participants = bill.participantIds.map((id) => travelerById(id)).filter(Boolean);
+      const participantText = participants.map((person) => person.name).join("、");
+      const noteText = [bill.category || "未分类", bill.note || ""].filter(Boolean).join(" · ");
+      return [
+        money(bill.baseAmountCents),
+        share > 0 ? money(share) : "未参与",
+        `<span title="${escapeAttribute(noteText)}">${escapeHtml(noteText)}</span>`,
+        escapeHtml(formatBillDate(bill.orderedAt || bill.createdAt)),
+        escapeHtml(payer?.name || "已移除"),
+        participantText
+          ? `<span title="${escapeAttribute(participantText)}">${escapeHtml(participantText)}</span>`
+          : "—"
+      ];
+    });
+    const amountTotal = entries.reduce((sum, entry) => sum + entry.bill.baseAmountCents, 0);
+    const shareTotal = entries.reduce((sum, entry) => sum + entry.share, 0);
+    return renderLedgerTable(
+      ["金额", "本人分摊", "分类 · 备注", "下单时间", "买单人", "分摊人"],
+      rows,
+      `<tr>
+        <th scope="row" class="ledger-cell-label">合计 ${entries.length} 笔</th>
+        <td>${escapeHtml(formatMoney(amountTotal, baseCurrency))}</td>
+        <td>${escapeHtml(formatMoney(shareTotal, baseCurrency))}</td>
+        <td colspan="4"></td>
+      </tr>`
+    );
+  }
+
+  /* 一个可点开的指标块：点数字把对应的账单明细铺在下面。 */
+  function renderMemberMetric(member, metric, label, amountCents) {
+    const key = `${member.traveler.id}:${metric}`;
+    const open = expandedMemberMetrics.has(key);
+    const panelId = `ledger-metric-${escapeAttribute(member.traveler.id)}-${metric}`;
+    return `
+      <div class="ledger-metric${open ? " is-open" : ""}">
+        <button class="ledger-metric-toggle" type="button"
+          data-ledger-action="toggle-member-metric"
+          data-ledger-person="${escapeAttribute(member.traveler.id)}"
+          data-ledger-metric="${metric}"
+          aria-expanded="${open}" aria-controls="${panelId}">
+          <span class="ledger-metric-label">${escapeHtml(label)}<span class="ledger-metric-caret" aria-hidden="true">${open ? "⌃" : "⌄"}</span></span>
+          <span class="ledger-metric-value">${escapeHtml(formatMoney(amountCents, ledgerData.settings.baseCurrency))}</span>
+        </button>
+        <div class="ledger-metric-detail" id="${panelId}" ${open ? "" : "hidden"}>
+          ${open ? renderMemberMetricTable(member, metric) : ""}
+        </div>
+      </div>`;
+  }
+
   function renderStatsPage() {
     const stats = calculateStats();
     const baseCurrency = ledgerData.settings.baseCurrency;
@@ -1183,11 +1251,16 @@
                     <span class="ledger-member-chevron" aria-hidden="true">›</span>
                   </summary>
                   <div class="ledger-member-stat-body">
-                    <dl class="ledger-member-metrics">
-                      <div><dt>实际支付</dt><dd>${escapeHtml(formatMoney(member.paidCents, baseCurrency))}</dd></div>
-                      <div><dt>个人应分摊</dt><dd>${escapeHtml(formatMoney(member.owedCents, baseCurrency))}</dd></div>
-                      <div><dt>结算结果</dt><dd class="${member.netCents > 0 ? "ledger-positive" : member.netCents < 0 ? "ledger-negative" : "ledger-neutral"}">${member.netCents > 0 ? "应收 " : member.netCents < 0 ? "应付 " : "已结清 "}${member.netCents === 0 ? "" : escapeHtml(formatMoney(Math.abs(member.netCents), baseCurrency))}</dd></div>
-                    </dl>
+                    <div class="ledger-member-metrics">
+                      ${renderMemberMetric(member, "paid", "实际支付", member.paidCents)}
+                      ${renderMemberMetric(member, "owed", "个人应分摊", member.owedCents)}
+                      <div class="ledger-metric">
+                        <div class="ledger-metric-static">
+                          <span class="ledger-metric-label">结算结果</span>
+                          <span class="ledger-metric-value ${member.netCents > 0 ? "ledger-positive" : member.netCents < 0 ? "ledger-negative" : "ledger-neutral"}">${member.netCents > 0 ? "应收 " : member.netCents < 0 ? "应付 " : "已结清 "}${member.netCents === 0 ? "" : escapeHtml(formatMoney(Math.abs(member.netCents), baseCurrency))}</span>
+                        </div>
+                      </div>
+                    </div>
                     <div class="ledger-member-bills">${renderRelatedBills(member)}</div>
                   </div>
                 </details>`).join("")}
@@ -2182,6 +2255,11 @@
       cancelBillNoteEditor();
     } else if (action === "cancel-edit") {
       editingBillId = null;
+      renderApp();
+    } else if (action === "toggle-member-metric") {
+      const key = `${button.dataset.ledgerPerson || ""}:${button.dataset.ledgerMetric || ""}`;
+      if (expandedMemberMetrics.has(key)) expandedMemberMetrics.delete(key);
+      else expandedMemberMetrics.add(key);
       renderApp();
     } else if (action === "select-all-participants") {
       const form = button.closest("form");
