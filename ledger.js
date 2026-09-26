@@ -152,6 +152,7 @@
   let editingNoteBillId = null;
   let pendingNoteSave = null;
   let noteOpenRequest = 0;
+  const expandedTransfers = new Set();               // 结算页里就地展开「怎么算的」的转账序号
   let mutationQueue = Promise.resolve();
 
   function normalizeSearch(value) {
@@ -1179,6 +1180,10 @@
   function renderStatsPage() {
     const stats = calculateStats();
     const baseCurrency = ledgerData.settings.baseCurrency;
+    /* 账单变动后转账笔数可能变少，顺手丢掉越界的展开序号。 */
+    for (const index of [...expandedTransfers]) {
+      if (index >= stats.transfers.length) expandedTransfers.delete(index);
+    }
     return `
       <section class="ledger-tab-panel" data-ledger-panel="stats" role="tabpanel" aria-labelledby="ledger-stats-tab" ${activeTab === "stats" ? "" : "hidden"}>
         <section class="ledger-stats-overview" aria-labelledby="ledger-stats-title">
@@ -1200,17 +1205,33 @@
               ${stats.transfers.map((transfer, index) => {
                 const from = travelerById(transfer.fromId);
                 const to = travelerById(transfer.toId);
+                const open = expandedTransfers.has(index);
                 return `
-                  <button class="ledger-transfer-row" type="button" data-ledger-action="explain-transfer" data-ledger-index="${index}" aria-label="查看 ${escapeAttribute(from?.name || "")} 转给 ${escapeAttribute(to?.name || "")} 的计算明细">
-                    <span class="ledger-transfer-person">
-                      ${renderAvatar(from)}
-                      <span><strong>${escapeHtml(from?.name || "")}</strong><small>转给 ${escapeHtml(to?.name || "")}</small></span>
-                    </span>
-                    <span class="ledger-transfer-amount-wrap">
-                      <strong class="ledger-transfer-amount">${escapeHtml(formatMoney(transfer.amountCents, baseCurrency))}</strong>
-                      <small class="ledger-transfer-hint">怎么算的 ›</small>
-                    </span>
-                  </button>`;
+                  <div class="ledger-transfer-item${open ? " is-open" : ""}">
+                    <button class="ledger-transfer-row" type="button" data-ledger-action="explain-transfer" data-ledger-index="${index}" aria-expanded="${open}" aria-controls="ledger-transfer-detail-${index}" aria-label="${open ? "收起" : "查看"}${escapeAttribute(from?.name || "")} 转给 ${escapeAttribute(to?.name || "")} 的计算明细">
+                      <span class="ledger-transfer-person">
+                        ${renderAvatar(from)}
+                        <span><strong>${escapeHtml(from?.name || "")}</strong><small>转给 ${escapeHtml(to?.name || "")}</small></span>
+                      </span>
+                      <span class="ledger-transfer-amount-wrap">
+                        <strong class="ledger-transfer-amount">${escapeHtml(formatMoney(transfer.amountCents, baseCurrency))}</strong>
+                        <small class="ledger-transfer-hint">${open ? "收起明细 ⌃" : "怎么算的 ⌄"}</small>
+                      </span>
+                    </button>
+                    <div class="ledger-transfer-detail" id="ledger-transfer-detail-${index}" ${open ? "" : "hidden"}>
+                      <div class="ledger-transfer-detail-inner">
+                        <div class="ledger-detail-head">
+                          <p class="ledger-detail-title">${escapeHtml(from?.name || "")} → ${escapeHtml(to?.name || "")} 怎么算的</p>
+                          <p class="ledger-detail-sub">第 ${index + 1} 笔 · 共 ${stats.transfers.length} 笔转账</p>
+                        </div>
+                        ${open ? transferDetailTables(index) : ""}
+                        ${open ? `
+                          <div class="ledger-detail-actions">
+                            <button type="button" data-ledger-action="zoom-transfer" data-ledger-index="${index}">放大查看</button>
+                          </div>` : ""}
+                      </div>
+                    </div>
+                  </div>`;
               }).join("")}
             </div>` : `
             <div class="ledger-empty-state"><p>${ledgerData.bills.length ? "大家已经结清，无需转账。" : "添加账单后，这里会自动生成结算单。"}</p></div>`}
@@ -2059,11 +2080,11 @@
     }));
   }
 
-  /* 点开某笔转账：把金额拆回「净额 → 撮合 → 抵消链路 → 账单级欠条」，方便核对。 */
-  function showTransferDetail(index) {
+  /* 把一笔转账拆回「净额 → 撮合 → 抵消链路 → 账单级欠条」，全部用表格列出，方便逐格核对。 */
+  function transferDetailTables(index) {
     const stats = calculateStats();
     const state = transferQueueState(stats, index);
-    if (!state) return;
+    if (!state) return "";
     const baseCurrency = ledgerData.settings.baseCurrency;
     const money = (cents) => escapeHtml(formatMoney(cents, baseCurrency));
     const { transfer, fromRemaining, toRemaining, fromAfter, toAfter } = state;
@@ -2076,34 +2097,68 @@
     const chain = findDebtChain(edges, transfer.fromId, transfer.toId);
     const directEdge = edges.find((edge) => edge.fromId === transfer.fromId && edge.toId === transfer.toId);
     const nameOf = (person) => escapeHtml(person?.name || "已移除");
+    const itemsOf = (items) => escapeHtml(describeDebtItems(items));
 
-    const edgeRow = (edge, personId, direction) => {
-      const otherId = direction === "out" ? edge.toId : edge.fromId;
-      const other = travelerById(otherId);
-      const verb = direction === "out" ? "应付" : "应收";
-      return `
-        <li class="ledger-detail-edge">
-          <span class="ledger-detail-edge-main">${verb} ${nameOf(other)} <b>${money(edge.amountCents)}</b></span>
-          <span class="ledger-detail-edge-meta">${escapeHtml(describeDebtItems(edge.items))}${edge.offsetCents ? ` · 已抵消反向 ${money(edge.offsetCents)}` : ""}</span>
-        </li>`;
-    };
+    /* 统一的表格骨架：第一列当标签列，tfoot 放小计/结论。 */
+    const renderTable = (columns, rows, foot) => `
+      <div class="ledger-detail-table-wrap">
+        <table class="ledger-detail-table">
+          <thead>
+            <tr>${columns.map((column) => `<th scope="col">${column}</th>`).join("")}</tr>
+          </thead>
+          <tbody>
+            ${rows.length
+              ? rows.map((cells) => `<tr>${cells.map((cell, cellIndex) => (
+                  `<td${cellIndex === 0 ? ` scope="row" class="ledger-detail-cell-label"` : ""}>${cell}</td>`
+                )).join("")}</tr>`).join("")
+              : `<tr><td class="ledger-detail-empty" colspan="${columns.length}">没有可列出的记录</td></tr>`}
+          </tbody>
+          ${foot ? `<tfoot>${foot}</tfoot>` : ""}
+        </table>
+      </div>`;
 
-    const personEdgesHtml = (personId) => {
-      const out = edges.filter((edge) => edge.fromId === personId);
-      const incoming = edges.filter((edge) => edge.toId === personId);
-      const outTotal = out.reduce((sum, edge) => sum + edge.amountCents, 0);
-      const inTotal = incoming.reduce((sum, edge) => sum + edge.amountCents, 0);
-      return `
-        <ul class="ledger-detail-edges">
-          ${out.length ? out.map((edge) => edgeRow(edge, personId, "out")).join("") : `<li class="ledger-detail-empty">没有应付出去的欠条</li>`}
-          ${incoming.length ? incoming.map((edge) => edgeRow(edge, personId, "in")).join("") : `<li class="ledger-detail-empty">没有应收进来的欠条</li>`}
-        </ul>
-        <p class="ledger-detail-subtotal">应收 ${money(inTotal)} − 应付 ${money(outTotal)} = 净额 ${money(inTotal - outTotal)}</p>`;
-    };
+    /* ① 净额：实付 − 应分摊 = 净额 */
+    const netRows = [fromMember, toMember].filter(Boolean).map((member) => {
+      const isPayer = member.netCents < 0;
+      return [
+        nameOf(member.traveler),
+        money(member.paidCents),
+        money(member.owedCents),
+        isPayer ? `<b class="is-out">应付 ${money(-member.netCents)}</b>` : `<b class="is-in">应收 ${money(member.netCents)}</b>`
+      ];
+    });
 
-    /* 链路长度 ≥2 才叫「经由中间人」；长度为 1 就是两人之间的直接欠条。 */
+    /* ② 撮合：排队到这一笔时两边各剩多少，取小即为本笔金额 */
+    const matchRows = [
+      ["本笔前", `还需支付 ${money(fromRemaining)}`, `还需收回 ${money(toRemaining)}`],
+      ["本笔金额", `<b class="is-out">付出 ${money(transfer.amountCents)}</b>`, `<b class="is-in">收回 ${money(transfer.amountCents)}</b>`],
+      ["本笔后", fromAfter > 0 ? `还需支付 ${money(fromAfter)}` : "已付清", toAfter > 0 ? `还需收回 ${money(toAfter)}` : "已收清"]
+    ];
+    const matchFoot = `<tr>
+      <th scope="row" class="ledger-detail-cell-label">本笔 = min(两方剩余)</th>
+      <td colspan="2"><b>${money(transfer.amountCents)}</b></td>
+    </tr>`;
+
+    /* ③ 抵消链路：经由中间人时把链上的原始欠条逐段列出 */
     const isChained = Boolean(chain && chain.path.length >= 2);
-    const chainHtml = isChained
+    const chainTable = isChained
+      ? renderTable(
+        ["#", "欠钱的人", "收钱的人", "欠条金额", "来源账单"],
+        chain.path.map((edge, step) => [
+          String(step + 1),
+          nameOf(travelerById(edge.fromId)),
+          nameOf(travelerById(edge.toId)),
+          `<b>${money(edge.amountCents)}</b>`,
+          itemsOf(edge.items)
+        ]),
+        `<tr>
+          <th scope="row" class="ledger-detail-cell-label">合并结果</th>
+          <td colspan="4">${nameOf(from)} 直接转 ${nameOf(to)} <b>${money(transfer.amountCents)}</b>，少转 ${chain.path.length - 1} 笔</td>
+        </tr>`
+      )
+      : "";
+
+    const chainSection = isChained
       ? `
         <div class="ledger-detail-chain">
           ${[nameOf(from), ...chain.path.map((edge) => nameOf(travelerById(edge.toId)))].map((label, step) => `
@@ -2114,24 +2169,109 @@
         </div>
         <p class="ledger-detail-note">
           这条链上最小的一段是 <b>${money(chain.bottleneck)}</b>：
-          原本要由 ${nameOf(from)} 转给中间人、中间人再转给 ${nameOf(to)}（${chain.path.length} 笔），
-          首尾相接后合并成 ${nameOf(from)} 直接转 ${nameOf(to)}，少转 ${chain.path.length - 1} 笔。
+          原本要由 ${nameOf(from)} 转给中间人、中间人再转给 ${nameOf(to)}（${chain.path.length} 笔），首尾相接后合并成一笔。
         </p>
-        <ul class="ledger-detail-edges">
-          ${chain.path.map((edge) => edgeRow(edge, edge.fromId, "out")).join("")}
-        </ul>`
+        ${chainTable}`
+      : `<p class="ledger-detail-note">${nameOf(from)} 与 ${nameOf(to)} 之间没有经由中间人的欠条链路，这笔是按两人的净额直接撮合出来的。</p>`;
+
+    const directSection = directEdge
+      ? renderTable(
+        ["关系", "金额", "来源账单", "说明"],
+        [[
+          `${nameOf(from)} → ${nameOf(to)}`,
+          `<b>${money(directEdge.amountCents)}</b>`,
+          itemsOf(directEdge.items),
+          isChained
+            ? "两人之间的直接欠条，已并入本笔"
+            : (directEdge.amountCents === transfer.amountCents ? "本笔就是按这条欠条转账" : `本笔是这条欠条的一部分`)
+        ]]
+      )
       : "";
 
-    const directHtml = directEdge
-      ? `<p class="ledger-detail-note">${isChained
-        ? `两人之间还有直接欠条 <b>${money(directEdge.amountCents)}</b>（${escapeHtml(describeDebtItems(directEdge.items))}），已并入本笔。`
-        : `${nameOf(from)} 与 ${nameOf(to)} 之间是直接欠条 <b>${money(directEdge.amountCents)}</b>（${escapeHtml(describeDebtItems(directEdge.items))}）${directEdge.amountCents === transfer.amountCents ? "，本笔就是按这条欠条转账。" : `，本笔 ${money(transfer.amountCents)} 是这条欠条的一部分。`}`}</p>`
-      : (isChained ? "" : `<p class="ledger-detail-note">${nameOf(from)} 与 ${nameOf(to)} 之间没有直接欠条，也没有可首尾相接的链路，这笔是按两人的净额撮合出来的。</p>`);
+    /* ④ 双方各自的全部欠条（已按同一对人互相抵消） */
+    const personTable = (personId) => {
+      const out = edges.filter((edge) => edge.fromId === personId);
+      const incoming = edges.filter((edge) => edge.toId === personId);
+      const outTotal = out.reduce((sum, edge) => sum + edge.amountCents, 0);
+      const inTotal = incoming.reduce((sum, edge) => sum + edge.amountCents, 0);
+      const rows = [
+        ...out.map((edge) => [
+          nameOf(travelerById(edge.toId)),
+          `<span class="is-out">应付</span>`,
+          `<b>${money(edge.amountCents)}</b>`,
+          edge.offsetCents ? `已抵消反向 ${money(edge.offsetCents)}` : "—",
+          itemsOf(edge.items)
+        ]),
+        ...incoming.map((edge) => [
+          nameOf(travelerById(edge.fromId)),
+          `<span class="is-in">应收</span>`,
+          `<b>${money(edge.amountCents)}</b>`,
+          edge.offsetCents ? `已抵消反向 ${money(edge.offsetCents)}` : "—",
+          itemsOf(edge.items)
+        ])
+      ];
+      return renderTable(
+        ["对象", "方向", "金额", "已抵消", "来源账单"],
+        rows,
+        `<tr>
+          <th scope="row" class="ledger-detail-cell-label">小计</th>
+          <td colspan="4">应收 ${money(inTotal)} − 应付 ${money(outTotal)} = 净额 <b>${money(inTotal - outTotal)}</b></td>
+        </tr>`
+      );
+    };
 
+    /* ⑤ 总账核对 */
     const totalTransfers = stats.transfers.reduce((sum, entry) => sum + entry.amountCents, 0);
     const paidTotal = stats.members.reduce((sum, member) => sum + member.paidCents, 0);
     const owedTotal = stats.members.reduce((sum, member) => sum + member.owedCents, 0);
 
+    return `
+      <section class="ledger-detail-section">
+        <h3>① 两人的净额</h3>
+        ${renderTable(["成员", "实付", "应分摊", "净额"], netRows)}
+        <p class="ledger-detail-note">分摊 = 每笔账单按参与人数平分（余数分给靠前的人，每人最多差 1 分）。</p>
+      </section>
+
+      <section class="ledger-detail-section">
+        <h3>② 本笔金额怎么取</h3>
+        ${renderTable(["", nameOf(from), nameOf(to)], matchRows, matchFoot)}
+        <p class="ledger-detail-note">结账排队时取两方剩余的较小值；本笔之后没结清的部分由后面的转账补齐。</p>
+      </section>
+
+      <section class="ledger-detail-section">
+        <h3>③ 抵消链路</h3>
+        ${chainSection}
+        ${directSection}
+      </section>
+
+      <section class="ledger-detail-section">
+        <h3>④ ${nameOf(from)} 的欠条（抵消后）</h3>
+        ${personTable(transfer.fromId)}
+        <h3 class="ledger-detail-subheading">${nameOf(to)} 的欠条（抵消后）</h3>
+        ${personTable(transfer.toId)}
+      </section>
+
+      <section class="ledger-detail-section">
+        <h3>⑤ 总账核对</h3>
+        ${renderTable(["项目", "金额"], [
+          ["总支出", money(stats.totalCents)],
+          ["实付合计", money(paidTotal)],
+          ["分摊合计", money(owedTotal)],
+          ["转账合计", `${money(totalTransfers)}（${stats.transfers.length} 笔）`]
+        ])}
+        <p class="ledger-detail-note">实付合计 = 分摊合计 = 总支出，转账合计 = 所有「应付」之和，说明账目配平。</p>
+      </section>`;
+  }
+
+  /* 放大查看：把同一份表格放进弹窗，方便在小屏上完整核对。 */
+  function showTransferDetail(index) {
+    const stats = calculateStats();
+    const transfer = stats.transfers[index];
+    if (!transfer) return;
+    const baseCurrency = ledgerData.settings.baseCurrency;
+    const from = travelerById(transfer.fromId);
+    const to = travelerById(transfer.toId);
+    const nameOf = (person) => escapeHtml(person?.name || "已移除");
     return settleDialog(mountDialog({
       className: "ledger-detail-dialog",
       ariaLabel: "转账计算明细",
@@ -2140,55 +2280,31 @@
           <div class="ledger-detail-people">
             ${renderAvatar(from)}<span class="ledger-detail-arrow" aria-hidden="true">→</span>${renderAvatar(to)}
           </div>
-          <p class="ledger-detail-title">${nameOf(from)} 转给 ${nameOf(to)} <b>${money(transfer.amountCents)}</b></p>
+          <p class="ledger-detail-title">${nameOf(from)} 转给 ${nameOf(to)} <b>${escapeHtml(formatMoney(transfer.amountCents, baseCurrency))}</b></p>
           <p class="ledger-detail-sub">第 ${index + 1} 笔 · 共 ${stats.transfers.length} 笔转账</p>
         </div>
-
-        <section class="ledger-detail-section">
-          <h3>① 两人的净额</h3>
-          <div class="ledger-detail-formula">
-            <p><span>${nameOf(from)}</span>实付 ${money(fromMember?.paidCents || 0)} − 应分摊 ${money(fromMember?.owedCents || 0)} = <b>应付 ${money(-(fromMember?.netCents || 0))}</b></p>
-            <p><span>${nameOf(to)}</span>实付 ${money(toMember?.paidCents || 0)} − 应分摊 ${money(toMember?.owedCents || 0)} = <b>应收 ${money(toMember?.netCents || 0)}</b></p>
-          </div>
-          <p class="ledger-detail-note">分摊 = 每笔账单按参与人数平分（余数分给靠前的人，每人最多差 1 分）。</p>
-        </section>
-
-        <section class="ledger-detail-section">
-          <h3>② 本笔金额怎么取</h3>
-          <p class="ledger-detail-note">结账排队时：${nameOf(from)} 还需支付 <b>${money(fromRemaining)}</b>，${nameOf(to)} 还需收回 <b>${money(toRemaining)}</b>，取两者的较小值。</p>
-          <p class="ledger-detail-formula-line">min(${money(fromRemaining)}, ${money(toRemaining)}) = <b>${money(transfer.amountCents)}</b></p>
-          <p class="ledger-detail-note">本笔之后：${nameOf(from)} ${fromAfter > 0 ? `还需支付 ${money(fromAfter)}（由后面的转账补齐）` : "已付清"}；${nameOf(to)} ${toAfter > 0 ? `还需收回 ${money(toAfter)}（由后面的转账补齐）` : "已收清"}。</p>
-        </section>
-
-        <section class="ledger-detail-section">
-          <h3>③ 抵消链路</h3>
-          ${chainHtml}
-          ${directHtml}
-        </section>
-
-        <section class="ledger-detail-section">
-          <h3>④ ${nameOf(from)} 的欠条（抵消后）</h3>
-          ${personEdgesHtml(transfer.fromId)}
-          <h3 class="ledger-detail-subheading">${nameOf(to)} 的欠条（抵消后）</h3>
-          ${personEdgesHtml(transfer.toId)}
-        </section>
-
-        <section class="ledger-detail-section">
-          <h3>⑤ 总账核对</h3>
-          <div class="ledger-detail-formula">
-            <p><span>总支出</span>${money(stats.totalCents)}</p>
-            <p><span>实付合计</span>${money(paidTotal)}</p>
-            <p><span>分摊合计</span>${money(owedTotal)}</p>
-            <p><span>转账合计</span>${money(totalTransfers)}（${stats.transfers.length} 笔）</p>
-          </div>
-          <p class="ledger-detail-note">实付合计 = 分摊合计 = 总支出，转账合计 = 所有「应付」之和，说明账目配平。</p>
-        </section>
-
+        ${transferDetailTables(index)}
         <div class="ledger-detail-actions">
           <button type="button" data-ledger-confirm="cancel">知道了</button>
         </div>
       </div>`
     }));
+  }
+
+  /* 结算页就地展开 / 收起某一笔转账的计算表格。 */
+  function toggleTransferDetail(index) {
+    const wasOpen = expandedTransfers.has(index);
+    if (wasOpen) expandedTransfers.delete(index);
+    else expandedTransfers.add(index);
+    renderApp();
+    if (!wasOpen) {
+      requestAnimationFrame(() => {
+        const panel = ledgerRoot?.querySelector(`#ledger-transfer-detail-${index}`);
+        if (panel && typeof panel.scrollIntoView === "function") {
+          panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+      });
+    }
   }
 
   async function deleteMember(id) {
@@ -2328,6 +2444,8 @@
       editingBillId = null;
       renderApp();
     } else if (action === "explain-transfer") {
+      toggleTransferDetail(Number(button.dataset.ledgerIndex || 0));
+    } else if (action === "zoom-transfer") {
       showTransferDetail(Number(button.dataset.ledgerIndex || 0));
     } else if (action === "select-all-participants") {
       const form = button.closest("form");

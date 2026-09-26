@@ -500,3 +500,33 @@ button.ledger-transfer-row:hover .ledger-transfer-hint { color: #2b7d8c; }
 .ledger-detail-subtotal { margin: 8px 0 0; padding: 8px 11px; border-radius: 11px; background: #f5f9f8; color: #5f7275; font-size: 12px; font-weight: 720; }
 .ledger-detail-actions { margin-top: 18px; }
 .ledger-detail-actions button { width: 100%; min-height: 44px; border: 1px solid rgba(40,123,144,.3); border-radius: 12px; background: #eaf4f5; color: #2b7d8c; font: inherit; font-size: 14px; font-weight: 720; cursor: pointer; }
+
+/* 转账计算明细：以表格形式就地铺在转账行下方 */
+.ledger-transfer-item + .ledger-transfer-item { margin-top: 8px; }
+.ledger-transfer-detail { padding: 0 2px; animation: ledger-detail-reveal .18s ease; }
+.ledger-transfer-detail[hidden] { display: none; }
+.ledger-transfer-detail-inner { margin-top: 8px; padding: 14px 12px 12px; border: 1px solid rgba(19,38,47,.09); border-radius: 14px; background: #fbfdfc; }
+.ledger-transfer-detail .ledger-detail-head { padding-bottom: 0; border-bottom: 0; text-align: left; }
+.ledger-transfer-detail .ledger-detail-title { font-size: 14px; }
+.ledger-transfer-detail .ledger-detail-section { margin-top: 14px; }
+.ledger-transfer-detail .ledger-detail-actions { margin-top: 14px; }
+.ledger-transfer-detail .ledger-detail-actions button { min-height: 38px; font-size: 13px; }
+@keyframes ledger-detail-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ledger-transfer-detail { animation: none; } }
+
+/* 明细表格 */
+.ledger-detail-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ledger-detail-table { width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.ledger-detail-table th, .ledger-detail-table td { padding: 7px 8px; text-align: right; white-space: nowrap; }
+.ledger-detail-table thead th { border-bottom: 1px solid rgba(19,38,47,.12); color: #869495; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; }
+.ledger-detail-table tbody td { border-bottom: 1px solid rgba(19,38,47,.06); color: #4d6164; }
+.ledger-detail-table tbody tr:last-child td { border-bottom: 0; }
+.ledger-detail-table tfoot th, .ledger-detail-table tfoot td { border-top: 1px solid rgba(19,38,47,.12); color: #5f7275; font-weight: 720; }
+.ledger-detail-table .ledger-detail-cell-label { text-align: left; color: var(--ink); font-weight: 720; }
+.ledger-detail-table td:first-child, .ledger-detail-table th:first-child { text-align: left; }
+.ledger-detail-table b { color: var(--ink); font-weight: 780; }
+.ledger-detail-table .is-out { color: #b04439; }
+.ledger-detail-table .is-in { color: #2b7d8c; }
+.ledger-detail-table td.ledger-detail-empty { color: #9aa7a8; text-align: center; }
+.ledger-detail-table td { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.ledger-detail-table td:nth-child(n+4) { white-space: normal; }
