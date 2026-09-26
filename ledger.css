@@ -458,3 +458,45 @@ body[data-active-view="ledger"] .topbar { background: rgba(250, 251, 249, .93); 
 @media (prefers-reduced-motion: reduce) {
   .ledger-bill-row--flash { animation: none; }
 }
+
+/* 结算转账行：整行可点，点开看这笔钱是怎么算出来的 */
+button.ledger-transfer-row { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
+button.ledger-transfer-row:hover { background: #fbfdfc; }
+button.ledger-transfer-row:focus-visible { outline: 2px solid #9fc4c9; outline-offset: 2px; }
+.ledger-transfer-amount-wrap { display: grid; justify-items: end; gap: 4px; }
+.ledger-transfer-hint { color: #9aa7a8; font-size: 10px; }
+button.ledger-transfer-row:hover .ledger-transfer-hint { color: #2b7d8c; }
+
+/* 转账计算明细弹窗 */
+.ledger-detail-dialog { width: min(100% - 32px, 520px); max-height: min(88dvh, 780px); margin: auto; overflow: auto; }
+.ledger-detail-card { padding: 20px 18px 16px; }
+.ledger-detail-head { padding-bottom: 14px; border-bottom: 1px solid rgba(19,38,47,.08); text-align: center; }
+.ledger-detail-people { display: flex; align-items: center; justify-content: center; gap: 9px; }
+.ledger-detail-arrow { color: #93a0a1; font-size: 17px; }
+.ledger-detail-title { margin: 11px 0 0; font-size: 16px; font-weight: 780; }
+.ledger-detail-title b { color: #b04439; }
+.ledger-detail-sub { margin: 4px 0 0; color: #8a9899; font-size: 11px; }
+.ledger-detail-section { margin-top: 16px; }
+.ledger-detail-section h3 { margin: 0 0 8px; color: var(--ink); font-size: 13px; font-weight: 800; }
+.ledger-detail-subheading { margin-top: 14px; }
+.ledger-detail-formula p { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 11px; border-radius: 11px; background: #f5f9f8; font-size: 12px; line-height: 1.5; }
+.ledger-detail-formula p + p { margin-top: 6px; }
+.ledger-detail-formula span { flex: 0 0 auto; color: #869495; }
+.ledger-detail-formula b { color: var(--ink); }
+.ledger-detail-formula-line { margin: 8px 0 0; padding: 9px 11px; border-radius: 11px; background: #eef5f4; color: #2b7d8c; font-size: 13px; font-weight: 750; text-align: center; }
+.ledger-detail-formula-line b { font-weight: 800; }
+.ledger-detail-note { margin: 8px 0 0; color: #5f7275; font-size: 11.5px; line-height: 1.65; }
+.ledger-detail-note b { color: var(--ink); }
+.ledger-detail-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 11px; border-radius: 12px; background: #eef5f4; font-size: 12px; }
+.ledger-detail-chain-node { font-weight: 780; }
+.ledger-detail-chain em { color: #2b7d8c; font-style: normal; font-weight: 780; }
+.ledger-detail-chain-arrow { color: #93a0a1; }
+.ledger-detail-edges { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.ledger-detail-edge { display: grid; gap: 2px; padding: 9px 11px; border: 1px solid rgba(19,38,47,.08); border-radius: 12px; background: #fff; }
+.ledger-detail-edge-main { font-size: 13px; font-weight: 720; }
+.ledger-detail-edge-main b { color: #b04439; }
+.ledger-detail-edge-meta { color: #869495; font-size: 11px; line-height: 1.5; }
+.ledger-detail-empty { padding: 8px 11px; border-radius: 12px; background: #f7faf9; color: #8a9899; font-size: 12px; list-style: none; }
+.ledger-detail-subtotal { margin: 8px 0 0; padding: 8px 11px; border-radius: 11px; background: #f5f9f8; color: #5f7275; font-size: 12px; font-weight: 720; }
+.ledger-detail-actions { margin-top: 18px; }
+.ledger-detail-actions button { width: 100%; min-height: 44px; border: 1px solid rgba(40,123,144,.3); border-radius: 12px; background: #eaf4f5; color: #2b7d8c; font: inherit; font-size: 14px; font-weight: 720; cursor: pointer; }
